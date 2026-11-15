@@ -266,7 +266,7 @@ class Bridge(private val act: MainActivity) {
         val f = File(dir, safe); f.writeBytes(bytes)
         val uri = FileProvider.getUriForFile(act, act.packageName + ".files", f)
         val view = Intent(if (b.optString("mode") == "save") Intent.ACTION_SEND else Intent.ACTION_VIEW).apply {
-            if (action == Intent.ACTION_SEND) { type = mime; putExtra(Intent.EXTRA_STREAM, uri) } else setDataAndType(uri, mime)
+            if (action == Intent.ACTION_SEND) { setType(mime); putExtra(Intent.EXTRA_STREAM, uri) } else setDataAndType(uri, mime)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         act.runOnUiThread {
