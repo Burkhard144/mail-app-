@@ -72,27 +72,38 @@ class MailCore(private val store: Store) {
 
     private fun user(acc: JSONObject) = acc.optString("user").ifBlank { acc.optString("email") }
 
-    fun storeFor(acc: JSONObject): IMAPStore {
+    /** Je Konto zwei Verbindungen: "" für Listen/Aktionen, READ fürs Öffnen von Mails – so wartet das Öffnen nie auf das Laden der Liste. */
+    private val READ = "#lesen"
+
+    fun storeFor(acc: JSONObject, slot: String = ""): IMAPStore {
         val id = acc.getString("id")
-        val cur = stores[id]
+        val key = id + slot
+        val cur = stores[key]
         if (cur != null && cur.isConnected) return cur
         try { cur?.close() } catch (_: Exception) {}
         val s = connectNew(acc, store.password(id))
-        stores[id] = s
+        stores[key] = s
         return s
     }
 
-    fun drop(id: String) { try { stores.remove(id)?.close() } catch (_: Exception) {}; folderCache.remove(id) }
-    fun dropAll() { stores.keys.toList().forEach { drop(it) } }
+    private fun dropKey(key: String) { try { stores.remove(key)?.close() } catch (_: Exception) {} }
+    fun drop(id: String) { dropKey(id); dropKey(id + READ); folderCache.remove(id); synchronized(readCache) { readCache.keys.removeAll { it.startsWith("$id|") } } }
+    fun dropAll() { stores.keys.toList().forEach { dropKey(it) }; folderCache.clear(); synchronized(readCache) { readCache.clear() } }
 
-    private fun <T> withAcc(acc: JSONObject, block: (IMAPStore) -> T): T {
-        synchronized(lockOf(acc.getString("id"))) {
-            return try { block(storeFor(acc)) } catch (e: UserError) { throw e } catch (e: MessagingException) {
+    private fun <T> withAcc(acc: JSONObject, slot: String = "", block: (IMAPStore) -> T): T {
+        val key = acc.getString("id") + slot
+        synchronized(lockOf(key)) {
+            return try { block(storeFor(acc, slot)) } catch (e: UserError) { throw e } catch (e: MessagingException) {
                 // einmal neu verbinden und erneut versuchen
-                drop(acc.getString("id"))
-                try { block(storeFor(acc)) } catch (e2: UserError) { throw e2 } catch (e2: Exception) { throw friendly(e2, acc) }
+                dropKey(key)
+                try { block(storeFor(acc, slot)) } catch (e2: UserError) { throw e2 } catch (e2: Exception) { throw friendly(e2, acc) }
             }
         }
+    }
+
+    /** Zuletzt geöffnete Mails im Speicher – erneutes Öffnen geht sofort. */
+    private val readCache = object : LinkedHashMap<String, JSONObject>(40, 0.75f, true) {
+        override fun removeEldestEntry(e: MutableMap.MutableEntry<String, JSONObject>?) = size > 40
     }
 
     fun friendly(e: Throwable, acc: JSONObject?): UserError {
@@ -333,8 +344,19 @@ class MailCore(private val store: Store) {
     }
 
     fun read(acc: JSONObject, path: String, uid: Long): JSONObject {
+        val ck = acc.getString("id") + "|" + path + "|" + uid
+        synchronized(readCache) { readCache[ck] }?.let { cached ->
+            // sofort anzeigen, „gelesen“ im Hintergrund auf dem Server setzen
+            Thread {
+                try { withAcc(acc, READ) { s ->
+                    val f = s.getFolder(path) as IMAPFolder; f.open(Folder.READ_WRITE)
+                    try { f.getMessageByUID(uid)?.setFlag(Flags.Flag.SEEN, true) } finally { try { f.close(false) } catch (_: Exception) {} }
+                } } catch (_: Exception) {}
+            }.start()
+            return cached
+        }
         val rules = store.load().getJSONObject("rules")
-        return withAcc(acc) { s ->
+        return withAcc(acc, READ) { s ->
             val f = s.getFolder(path) as IMAPFolder
             f.open(Folder.READ_WRITE)
             try {
@@ -384,13 +406,14 @@ class MailCore(private val store: Store) {
                     .put("attachments", atts)
                     .put("score", sc.score).put("reasons", sc.reasons.toJson()).put("allowed", sc.allowed)
                     .put("unsubscribe", unsubUrl)
+                    .also { r -> if ((html?.length ?: 0) < 1_500_000) synchronized(readCache) { readCache[ck] = r } }
             } finally { try { f.close(false) } catch (_: Exception) {} }
         }
     }
 
     /** Liefert einen Anhang als Bytes. */
     fun attachment(acc: JSONObject, path: String, uid: Long, index: Int): Triple<String, String, ByteArray> {
-        return withAcc(acc) { s ->
+        return withAcc(acc, READ) { s ->
             val f = s.getFolder(path) as IMAPFolder
             f.open(Folder.READ_ONLY)
             try {

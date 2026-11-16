@@ -688,7 +688,7 @@ const fmtSize=b=>b>1e6?(b/1e6).toFixed(1).replace('.',',')+' MB':Math.max(1,Math
 function showErr(id,msg){const e=$(id);if(e){e.textContent=msg;e.hidden=false}}
 
 /* ================= Anmeldung ================= */
-const LOGO='<svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3cc1bb"/><stop offset="1" stop-color="#0b6f6e"/></linearGradient></defs><rect x="4" y="4" width="56" height="56" rx="16" fill="url(#lg)"/><rect x="4" y="4" width="56" height="28" rx="16" fill="#fff" opacity=".18"/><path d="M16 22h32v22H16zM16 23l16 12 16-12" fill="none" stroke="#fff" stroke-width="3.5" stroke-linejoin="round"/></svg>';
+const LOGO='<svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#62b0ff"/><stop offset=".55" stop-color="#1f5fe0"/><stop offset="1" stop-color="#0e2a86"/></linearGradient><linearGradient id="lgE" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d3e2ff"/></linearGradient><linearGradient id="lgB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffc766"/><stop offset="1" stop-color="#ff7a1a"/></linearGradient></defs><rect x="3" y="3" width="58" height="58" rx="16" fill="url(#lg)"/><ellipse cx="22" cy="13" rx="21" ry="10" fill="#fff" opacity=".22"/><rect x="3.5" y="3.5" width="57" height="57" rx="15.5" fill="none" stroke="#fff" stroke-opacity=".35"/><rect x="14" y="25" width="36" height="25" rx="5" fill="#04163f" opacity=".3"/><rect x="14" y="22" width="36" height="25" rx="5" fill="url(#lgE)"/><path d="M15 46L32 34L49 46Z" fill="#c2d5fb"/><path d="M15.5 23.5L32 37L48.5 23.5Z" fill="#fff" stroke="#adc4f2" stroke-linejoin="round"/><circle cx="48.5" cy="21" r="6.5" fill="url(#lgB)" stroke="#fff" stroke-width="2"/></svg>';
 function showLogin(){
   $('root').innerHTML=`<div class="login"><form class="modal" id="loginform">${LOGO}<h3>Mail</h3>
     <div class="field"><label for="pw">Passwort</label><input id="pw" type="password" autocomplete="current-password" required></div>
@@ -824,6 +824,7 @@ function renderList(){
   const n=CHECK.size;
   const sameAcc=n&&new Set([...CHECK].map(k=>k.split('\u0001')[0])).size===1;
   const away=V.type==='uni'&&V.role==='inbox'&&awayActive();
+  const lk=JSON.stringify(V)+'|'+Q,mEl=$('mails'),keepTop=mEl&&renderList._k===lk?mEl.scrollTop:0;renderList._k=lk;
   el.innerHTML=`
     <div class="pane-head"><button class="btn icon back" data-act="pane" data-p="side" aria-label="Zu den Ordnern">${ic('back')}</button>
       <h2>${titleHtml()}</h2>
@@ -852,6 +853,7 @@ function renderList(){
       ${LOADING&&ITEMS.length?'<div class="spin" role="status" aria-label="Lädt weitere Konten"></div>':''}</div>
     <button class="fab" data-act="compose" aria-label="Neue E-Mail schreiben">${ic('pen')}</button>`;
   $('sform').addEventListener('submit',e=>{e.preventDefault();Q=$('q').value.trim();loadList()});
+  if(keepTop)$('mails').scrollTop=keepTop;
 }
 
 /* ================= Lesen ================= */
@@ -1543,7 +1545,7 @@ const SECS=[
   ['away','Abwesenheitsnotiz','plane',()=>awayActive()?'An'+(S_().away.to?' bis '+fmtDay(S_().away.to):''):'Aus'],
   ['ai','KI-Assistent','spark',()=>S_().ai===false?'Aus':'Korrektur, Zusammenfassung, Vorschläge'],
   ['contacts','Kontakte vom Handy','phone',()=>S_().phoneSuggest===false?'Vorschläge aus':'Vorschläge an'],
-  ['security','Sicherheit','lock',()=>((S_().lock||{}).on===false?'Ohne Fingerabdruck':'Fingerabdruck')+' · Bildschirmfotos '+(S_().screenshots===false?'gesperrt':'erlaubt')],
+  ['security','Fingerabdruck und Sicherheit','lock',()=>((S_().lock||{}).on===false?'Ohne Fingerabdruck/PIN':'Fingerabdruck/PIN an')+' · Bildschirmfotos '+(S_().screenshots===false?'gesperrt':'erlaubt')],
   ['storage','Speicher','archive',()=>`Zwischenspeicher ${CACHE_MB.toLocaleString('de-DE')} MB`]];
 const fmtDay=s=>{try{return new Date(s).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'})}catch(e){return s}};
 function awayActive(){const a=S_().away||{};if(!a.on)return false;const t=new Date().toISOString().slice(0,10);return (!a.from||a.from<=t)&&(!a.to||a.to>=t)}
@@ -1612,8 +1614,8 @@ function renderSettings(){
       <p class="hint">Für jede KI-Funktion wird nur der Text geschickt, den du gerade bearbeitest oder liest – nie dein ganzes Postfach.</p>`}
   if(sec==='contacts'){h=`<div class="sgroup">${swH('pc-on',s.phoneSuggest!==false,'Handy-Kontakte bei der Adress-Eingabe vorschlagen','Kontakte mit E-Mail-Adresse aus dem Telefonbuch erscheinen beim Tippen im Feld „An“, auch ohne Übernahme ins Adressbuch.')}</div>
       <button class="btn primary fitbtn" data-act="phoneimport">${ic('phone')}Vom Handy übernehmen</button>`}
-  if(sec==='security'){const l=s.lock||{};h=`<div class="sgroup">${swH('l-on',l.on!==false,'Mit Fingerabdruck entsperren','Beim Start und nach einer Pause. Klappt der Finger nicht, geht auch die Handy-PIN.')}
-      <span class="fl">Sperren, wenn Mail im Hintergrund war</span>${segH('l-after',[[0,'Sofort'],[1,'1 Min'],[5,'5 Min'],[15,'15 Min']],Number(l.after??1))}</div>
+  if(sec==='security'){const l=s.lock||{};h=`<div class="sgroup">${swH('l-on',l.on!==false,'Fingerabdruck / PIN beim Öffnen','An: Mail fragt beim Start und nach einer Pause nach Fingerabdruck oder Handy-PIN. Aus: Mail öffnet sofort ohne Abfrage.')}
+      ${l.on===false?'':`<span class="fl">Sperren, wenn Mail im Hintergrund war</span>${segH('l-after',[[0,'Sofort'],[1,'1 Min'],[5,'5 Min'],[15,'15 Min']],Number(l.after??1))}`}</div>
       <div class="sgroup">${swH('l-shot',s.screenshots!==false,'Bildschirmfotos erlauben','Aus: Android verhindert Screenshots von Mail und zeigt die App im App-Wechsler unscharf.')}</div>
       <p class="hint">Links aus Mails öffnen immer in deinem Standard-Browser.</p>`}
   if(sec==='storage'){h=`<div class="sgroup"><div class="cache"><span class="big">${CACHE_MB.toLocaleString('de-DE')} MB</span><span>Zwischenspeicher: geladene Mails, Anhänge, Bilder</span></div>
@@ -1647,7 +1649,7 @@ function renderSettings(){
   onSw('ai-on',v=>setAndRefresh({ai:v},v?'KI-Assistent an':'KI-Assistent aus'));
   if($('ai-save'))$('ai-save').onclick=async()=>{const k=$('ai-key').value.trim();if(!k){toast('Bitte den Schlüssel einfügen.');return}try{const r=await api('saveAiKey',{key:k});CFG.hasAiKey=r.hasAiKey;$('ai-key').value='';$('ai-key').placeholder='Schlüssel ist gespeichert';toast('KI-Schlüssel gespeichert')}catch(e){toast(e.message)}};
   onSw('pc-on',v=>setAndRefresh({phoneSuggest:v}));
-  onSw('l-on',v=>setAndRefresh({lock:{...(S_().lock||{}),on:v}},v?'Fingerabdruck-Sperre an':'Fingerabdruck-Sperre aus'));
+  onSw('l-on',v=>setAndRefresh({lock:{...(S_().lock||{}),on:v}},v?'Fingerabdruck/PIN ist an':'Fingerabdruck/PIN ist aus').then(()=>{renderRead();renderSide()}));
   onSeg('l-after',v=>setAndRefresh({lock:{...(S_().lock||{}),after:Number(v)}}));
   onSw('l-shot',v=>setAndRefresh({screenshots:v},v?'Bildschirmfotos erlaubt':'Bildschirmfotos gesperrt'));
   if($('c-clear'))$('c-clear').onclick=()=>{modal(`<h3>Zwischenspeicher leeren?</h3><p class="hint">${CACHE_MB.toLocaleString('de-DE')} MB werden freigegeben. Mails und Konten bleiben erhalten.</p><div class="actions"><button class="btn" data-act="close">Abbrechen</button><button class="btn dangerfill" id="cc-go">Leeren</button></div>`,'sheet');
