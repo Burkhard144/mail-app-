@@ -121,6 +121,17 @@ class MailCore(private val store: Store) {
         }
     }
 
+    /** Ordnernamen mit Umlauten liegen auf dem Server als „H&APY-he“ (modifiziertes UTF-7). Für die Anzeige zurückwandeln. */
+    private fun decodeMutf7(s: String): String = try {
+        Regex("&([A-Za-z0-9+,]*)-").replace(s) { m ->
+            val b = m.groupValues[1]
+            if (b.isEmpty()) "&" else {
+                val pad = b.replace(',', '/') + "=".repeat((4 - b.length % 4) % 4)
+                String(android.util.Base64.decode(pad, android.util.Base64.DEFAULT), Charsets.UTF_16BE)
+            }
+        }
+    } catch (_: Exception) { s }
+
     // ---------- Ordner ----------
     private val NAME_RULES = listOf(
         "junk" to Regex("^(spam|junk|spamverdacht|unerw[uü]nscht|bulk)", RegexOption.IGNORE_CASE),
@@ -148,7 +159,7 @@ class MailCore(private val store: Store) {
                 if (role == "all" || role == "flagged" || role == "important") continue
                 val sep = try { f.separator } catch (_: Exception) { '/' }
                 val parts = f.fullName.split(sep)
-                out += FolderInfo(f.fullName, if (role == "inbox") "Posteingang" else f.name, role ?: "custom", sep,
+                out += FolderInfo(f.fullName, if (role == "inbox") "Posteingang" else decodeMutf7(f.name), role ?: "custom", sep,
                     if (parts.size > 1) parts.dropLast(1).joinToString(sep.toString()) else null, maxOf(0, parts.size - 1))
             }
             val seen = mutableSetOf<String>()

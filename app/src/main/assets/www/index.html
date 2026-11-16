@@ -242,7 +242,7 @@ details.adv summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--mu
 .pop-back{position:fixed;inset:0;z-index:80;background:rgba(8,20,24,.32);display:grid;place-items:center;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
 .pop{width:min(440px,100%);max-height:70vh;overflow:auto;border-radius:22px;padding:8px;background:var(--pop-bg);border:1px solid var(--line);
   backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);box-shadow:inset 0 1px 0 var(--hi),0 30px 60px -20px var(--shadow);display:flex;flex-direction:column;gap:4px}
-.pop-opt{border:1px solid transparent;background:none;text-align:left;padding:12px 14px;border-radius:14px;white-space:pre;overflow:hidden;text-overflow:ellipsis;font-size:15px}
+.pop-opt{flex:none;line-height:1.35;border:1px solid transparent;background:none;text-align:left;padding:12px 14px;border-radius:14px;white-space:pre;overflow:hidden;text-overflow:ellipsis;font-size:15px}
 .pop-opt:hover{background:var(--sel)}
 .pop-opt.on{font-weight:600;color:var(--accent)}
 
@@ -677,7 +677,7 @@ let LOGOS=true,BIG=true;try{LOGOS=localStorage.getItem('gp-logos')!=='0';BIG=loc
 const FREEMAIL=new Set('gmail.com googlemail.com gmx.de gmx.net gmx.at gmx.ch web.de t-online.de outlook.com outlook.de hotmail.com hotmail.de live.com live.de msn.com yahoo.com yahoo.de icloud.com me.com mac.com aol.com freenet.de arcor.de posteo.de mailbox.org protonmail.com proton.me vodafone.de online.de email.de kabelmail.de strato.de example'.split(' '));
 function baseDomain(addr){const d=(String(addr||'').split('@')[1]||'').toLowerCase().replace(/[>\s]/g,'');if(!d)return '';const p=d.split('.');
   return p.slice(/^(co|com|org|net|gov|ac)\.[a-z]{2}$/.test(p.slice(-2).join('.'))?-3:-2).join('.');}
-const AVC=['#2a9d8f','#c9711b','#5a6fd8','#b04a8f','#2e9e5b','#bf3d36','#7b5cc4','#1f7fb5'];
+const AVC=['#3b82c4','#c9711b','#5a6fd8','#b04a8f','#8a6d3b','#bf3d36','#7b5cc4','#1f7fb5'];
 function initials(n){const w=String(n||'?').replace(/["'<>()]/g,'').trim().split(/[\s@._-]+/).filter(Boolean);return ((w[0]||'?')[0]+(w.length>1?w[1][0]:'')).toUpperCase()}
 function avatarHtml(m,a){const out=m.role==='sent'||m.role==='drafts';const who=out?(m.to||''):(m.from||m.fromAddr);
   const addr=out?(String(m.to||'').match(/[^\s<,]+@[^\s>,]+/)||[''])[0]:m.fromAddr;
@@ -760,6 +760,7 @@ function treeHtml(acc){
   return (kids['']||[]).sort(sortF).map(f=>row(f,0)).join('');
 }
 function renderSide(){
+  CFG.accounts.forEach(a=>{if(String(a.color).toLowerCase()==='#0d8584')a.color='#2f86e6'});
   const el=$('side');if(!el)return;
   const uni=(role,label,icon,badge)=>`<button class="nav ${V.type==='uni'&&V.role===role?'active':''}" data-act="uni" data-role="${role}">${ic(icon)}<span class="txt">${label}</span>${badge}</button>`;
   const iu=CFG.accounts.reduce((s,a)=>s+accInboxUnseen(a.id),0),jm=sum('junk','messages');
