@@ -248,6 +248,19 @@ details.adv summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--mu
 
 /* ===== Liste: Vorschau, Sortierordner, langes Drücken ===== */
 .mail{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.mail .av{grid-row:1/4;position:relative;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--avc);color:#fff;font-weight:700;font-size:16px;letter-spacing:.02em;margin-top:2px;
+  box-shadow:inset 0 2px 3px rgba(255,255,255,.4),inset 0 -3px 6px rgba(0,0,0,.25),0 4px 10px -4px var(--shadow)}
+.mail .ck[hidden]+.av{grid-column:1/3}
+.mail .av img{position:absolute;inset:0;width:100%;height:100%;border-radius:50%;object-fit:contain;background:#fff;padding:8px;box-sizing:border-box;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+.mail .av-acc{position:absolute;right:-2px;bottom:-2px;width:13px;height:13px;border-radius:50%;box-shadow:0 0 0 2px var(--pane-solid,#fff)}
+.mail .date{align-self:center}
+.biglist .mail{padding:14px 12px;gap:4px 12px;margin-bottom:2px;border-radius:16px}
+.biglist .mail+.mail,.biglist .mrow+.mrow{border-top:1px solid var(--line)}
+.biglist .mail .from{font-size:18px}
+.biglist .mail .date{font-size:14px}
+.biglist .mail .subj{font-size:16.5px}
+.biglist .mail .prev{font-size:15px;line-height:1.45}
+.biglist .mail .av{width:52px;height:52px;font-size:19px}
 .mail .prev{grid-column:3/5;color:var(--muted);font-size:13px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-top:1px}
 .ftag{font-style:normal;font-size:11px;font-weight:600;padding:1px 7px;border-radius:99px;background:var(--sel);color:var(--accent);flex:none;white-space:nowrap}
 .ctx-head{display:flex;gap:10px;align-items:flex-start;margin-bottom:14px}
@@ -655,6 +668,22 @@ function setPane(p){const a=$('app');if(a)a.dataset.pane=p}
 function fmtDate(t){const d=new Date(t),n=new Date();
   if(d.toDateString()===n.toDateString())return d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
   return d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:d.getFullYear()===n.getFullYear()?undefined:'2-digit'});}
+function fmtAgo(t){const d=new Date(t),s=(Date.now()-d)/1000;
+  if(s<60)return 'jetzt';if(s<3600)return Math.floor(s/60)+' Min';if(s<86400)return Math.floor(s/3600)+' Std';
+  const y=new Date();y.setDate(y.getDate()-1);if(d.toDateString()===y.toDateString())return 'Gestern';
+  if(s<6*86400)return d.toLocaleDateString('de-DE',{weekday:'short'}).replace('.','');
+  return fmtDate(t);}
+let LOGOS=true,BIG=true;try{LOGOS=localStorage.getItem('gp-logos')!=='0';BIG=localStorage.getItem('gp-big')!=='0'}catch(e){}
+const FREEMAIL=new Set('gmail.com googlemail.com gmx.de gmx.net gmx.at gmx.ch web.de t-online.de outlook.com outlook.de hotmail.com hotmail.de live.com live.de msn.com yahoo.com yahoo.de icloud.com me.com mac.com aol.com freenet.de arcor.de posteo.de mailbox.org protonmail.com proton.me vodafone.de online.de email.de kabelmail.de strato.de example'.split(' '));
+function baseDomain(addr){const d=(String(addr||'').split('@')[1]||'').toLowerCase().replace(/[>\s]/g,'');if(!d)return '';const p=d.split('.');
+  return p.slice(/^(co|com|org|net|gov|ac)\.[a-z]{2}$/.test(p.slice(-2).join('.'))?-3:-2).join('.');}
+const AVC=['#0d8584','#c9711b','#5a6fd8','#b04a8f','#2e9e5b','#bf3d36','#7b5cc4','#1f7fb5'];
+function initials(n){const w=String(n||'?').replace(/["'<>()]/g,'').trim().split(/[\s@._-]+/).filter(Boolean);return ((w[0]||'?')[0]+(w.length>1?w[1][0]:'')).toUpperCase()}
+function avatarHtml(m,a){const out=m.role==='sent'||m.role==='drafts';const who=out?(m.to||''):(m.from||m.fromAddr);
+  const addr=out?(String(m.to||'').match(/[^\s<,]+@[^\s>,]+/)||[''])[0]:m.fromAddr;
+  const dom=baseDomain(addr);let h=0;for(const c of String(addr||who))h=(h*31+c.charCodeAt(0))>>>0;
+  const img=LOGOS&&dom&&!FREEMAIL.has(dom)&&!dom.endsWith('.example')?`<img src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(dom)}&amp;sz=128" alt="" loading="lazy" referrerpolicy="no-referrer" onload="if(this.naturalWidth<=16)this.remove()" onerror="this.remove()">`:'';
+  return `<span class="av" style="--avc:${AVC[h%AVC.length]}" aria-hidden="true"><span>${esc(initials(who))}</span>${img}<span class="av-acc" style="background:${a.color||'var(--muted)'}"></span></span>`}
 const fmtSize=b=>b>1e6?(b/1e6).toFixed(1).replace('.',',')+' MB':Math.max(1,Math.round(b/1e3))+' KB';
 function showErr(id,msg){const e=$(id);if(e){e.textContent=msg;e.hidden=false}}
 
@@ -810,14 +839,14 @@ function renderList(){
       ${sameAcc?`<button class="btn" data-act="bulkmove">${ic('move')}Verschieben</button>`:''}
       <button class="btn danger" data-act="bulkdel">${ic('trash')}${isTrash?'Endgültig löschen':'Löschen'}</button>`:''}</div>`:''}
     ${NOTES.map(t=>`<div class="note err">${esc(t)}</div>`).join('')}
-    <div class="scroll" id="mails">${ITEMS.map(m=>{const a=accOf(m.acc)||{};const k=keyOf(m);
+    <div class="scroll ${BIG?'biglist':''}" id="mails">${ITEMS.map(m=>{const a=accOf(m.acc)||{};const k=keyOf(m);
       const who=(m.role==='sent'||m.role==='drafts')?'An: '+(m.to||'–'):m.from;
       const sus=P>=2&&m.role!=='junk'&&!m.allowed&&m.score>=thr;
       return `<div class="mrow"><div class="swipe-bg" aria-hidden="true"><span class="sw-l">${ic('mailopen')}${m.seen?'Ungelesen':'Gelesen'}</span><span class="sw-r">${ic('trash')}${m.role==='trash'?'Endgültig':'Löschen'}</span></div>
       <div class="mail ${m.seen?'':'unread'} ${SEL===k?'active':''}" data-act="open" data-k="${esc(k)}" tabindex="0" role="button">
         <input type="checkbox" class="ck" data-act="ck" data-k="${esc(k)}" ${CHECK.has(k)?'checked':''} ${SELECTMODE?'':'hidden'} aria-label="Auswählen">
-        <span class="dot" style="background:${a.color||'var(--muted)'}" title="${esc(a.email||'')}"></span>
-        <span class="from">${esc(who)}</span><span class="date">${m.hasAtt?'<span class="clip-i">'+ic('clip')+'</span>':''}${m.flagged?'<span class="star">★</span> ':''}${fmtDate(m.date)}</span>
+        ${avatarHtml(m,a)}
+        <span class="from">${esc(who)}</span><span class="date" title="${esc(new Date(m.date).toLocaleString('de-DE'))}">${m.hasAtt?'<span class="clip-i">'+ic('clip')+'</span>':''}${m.flagged?'<span class="star">★</span> ':''}${fmtAgo(m.date)}</span>
         <span class="subj">${sus?'<em class="badge">Spamverdacht</em>':''}${m.ftag?`<em class="ftag">${esc(m.ftag)}</em>`:''}<span>${esc(m.subject||'(kein Betreff)')}</span></span>${VIEW==='preview'&&m.preview?`<span class="prev">${esc(m.preview)}</span>`:''}</div></div>`}).join('')
       ||(LOADING?'<div class="spin" role="status" aria-label="Lädt"></div>':`<div class="empty"><b>${Q?'Keine Treffer':isJunk?'Kein Spam':'Hier ist es leer'}</b>${Q?'Versuche einen anderen Suchbegriff.':isJunk?'Deine Spam-Ordner sind sauber.':'Neue Mails erscheinen hier automatisch.'}</div>`)}
       ${LOADING&&ITEMS.length?'<div class="spin" role="status" aria-label="Lädt weitere Konten"></div>':''}</div>
@@ -1029,7 +1058,7 @@ function spamCfg(){
     catch(e){showErr('r-err',e.message)}};
 }
 /* ---- Hilfen: Ansicht, Sortierordner, Adressbuch ---- */
-let VIEW='compact';try{VIEW=localStorage.getItem('gp-view')||'compact'}catch(e){}
+let VIEW='preview';try{VIEW=localStorage.getItem('gp-view')||'preview'}catch(e){}
 let SELC=null,CQ='',SETSEC=null,OUTBOX=[],AI=null,CACHE_MB=0;
 const S_=()=>CFG.settings||{};
 const SORT_RX=/^(freunde|unbekannt|allgemein)/i;
@@ -1533,6 +1562,8 @@ function renderSettings(){
   const S=SECS.find(x=>x[0]===sec);let h='';
   if(sec==='look'){h=`<div class="sgroup"><span class="fl">Design</span>${segH('s-theme',[['auto','Automatisch'],['light','☀ Hell'],['dark','☾ Dunkel']],THEME)}<p class="hint">Den schnellen Wechsel findest du auch oben neben „Mail“ als Sonne und Mond.</p></div>
      <div class="sgroup"><span class="fl">Mails in der Liste</span>${segH('s-view',[['compact','Absender und Betreff'],['preview','Mit Textvorschau']],VIEW)}</div>
+     <div class="sgroup"><span class="fl">Größe der Einträge</span>${segH('s-big',[['0','Normal'],['1','Groß']],BIG?'1':'0')}</div>
+     <div class="sgroup"><span class="fl">Absender-Logos</span>${segH('s-logos',[['1','Logos anzeigen'],['0','Nur Anfangsbuchstaben']],LOGOS?'1':'0')}<p class="hint">Die Logos holt Mail über den Bilderdienst von Google, nur anhand der Firmenadresse (z. B. amazon.de). Deine eigene Adresse und der Inhalt der Mails werden dabei nie übertragen. Bei privaten Adressen (Gmail, GMX, WEB.DE …) erscheinen immer die Anfangsbuchstaben.</p></div>
      <div class="sgroup"><span class="fl">Start der App</span><p class="hint" style="margin:0">Mail öffnet immer mit „Alle Posteingänge“.</p></div>`}
   if(sec==='protect'){const L=protLevel();const feats=[
       ['Externe Bilder blockieren, bis du sie freigibst',1],['Spamverdacht mit Begründung anzeigen',2],['Warnung bei Links, deren Ziel nicht zum Text passt',2],['Warnung vor gefährlichen Anhängen (.exe, .apk, Makro-Dateien)',2],
@@ -1593,6 +1624,8 @@ function renderSettings(){
   // Handler
   onSeg('s-theme',v=>{setTheme(v);renderSettingsList()});
   onSeg('s-view',v=>{VIEW=v;try{localStorage.setItem('gp-view',v)}catch(_){}renderSettingsList()});
+  onSeg('s-big',v=>{BIG=v==='1';try{localStorage.setItem('gp-big',v)}catch(_){}});
+  onSeg('s-logos',v=>{LOGOS=v==='1';try{localStorage.setItem('gp-logos',v)}catch(_){}});
   onSeg('s-prot',v=>setAndRefresh({protect:v},'Schutzstufe gespeichert').then(()=>{renderRead();if(CUR)renderRead()}));
   ['instant','popup','code','preview','sound'].forEach(k=>onSw('n-'+k,v=>{setAndRefresh({notify:{...(S_().notify||{}),[k]:v}});if(k==='popup'&&v)api('ensureOverlay').catch(()=>{})}));
   if($('bat-open'))$('bat-open').onclick=()=>api('openBattery').catch(()=>{});
