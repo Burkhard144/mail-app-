@@ -507,6 +507,12 @@ details.adv summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--mu
 .p-side .pane-head .btn.primary{width:92px;height:50px;border-radius:16px}
 .p-side .pane-head .btn.primary svg{width:26px;height:26px;stroke-width:2.2}
 .p-side .pane-head .theme-btn{width:50px;height:50px;border-radius:16px}
+.p-side .pane-head .inbox-btn{width:92px;height:50px;border-radius:16px;position:relative;color:var(--accent)}
+.p-side .pane-head .inbox-btn svg{width:28px;height:28px;stroke-width:2.1}
+.ib-count{position:absolute;top:-7px;right:-6px;min-width:22px;height:22px;padding:0 6px;border-radius:11px;background:var(--accent2);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;box-shadow:0 2px 6px -2px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.4)}
+@media (max-width:420px){.p-side .pane-head .inbox-btn,.p-side .pane-head .btn.primary{width:78px}.p-side .pane-head{gap:8px}}
+.def-badge{display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:1px 7px;border-radius:99px;font-size:11px;font-weight:600;background:var(--sel);color:var(--accent);vertical-align:middle}
+.def-badge svg{width:11px;height:11px}
 .p-side .pane-head .theme-btn svg{width:24px;height:24px}
 .menu-list .btn{white-space:normal;text-align:left;justify-content:flex-start}
 @media (max-width:880px){.pane-head .btn.back{width:48px;height:44px}}
@@ -803,13 +809,13 @@ function renderSide(){
   const accs=CFG.accounts.map(a=>{const ov=OV[a.id]||{};
     return `<div class="${COLLAPSED[a.id]?'collapsed':''}"><div class="acc-head">
       <button class="mini" data-act="toggle" data-acc="${a.id}" aria-label="Ordner von ${esc(a.name)} auf- oder zuklappen"><span class="chev">${ic('chev')}</span></button>
-      <button class="nav" data-act="box" data-acc="${a.id}" data-path="INBOX"><span class="dot" style="background:${a.color}"></span><span class="txt">${esc(a.name)}<span class="addr">${esc(a.email)}</span></span>${accInboxUnseen(a.id)?`<span class="count">${accInboxUnseen(a.id)}</span>`:''}</button>
+      <button class="nav" data-act="box" data-acc="${a.id}" data-path="INBOX"><span class="dot" style="background:${a.color}"></span><span class="txt">${esc(a.name)}${a.id===S_().defaultFrom?`<span class="def-badge" title="Standard-Absender">${ic('star')}Standard</span>`:''}<span class="addr">${esc(a.email)}</span></span>${accInboxUnseen(a.id)?`<span class="count">${accInboxUnseen(a.id)}</span>`:''}</button>
       <button class="mini" data-act="newfold" data-acc="${a.id}" aria-label="Ordner in ${esc(a.name)} anlegen">${ic('plus')}</button>
       <button class="mini" data-act="editacc" data-acc="${a.id}" aria-label="Konto ${esc(a.name)} bearbeiten">${ic('gear')}</button></div>
       ${ov.error?`<div class="acc-err">${esc(ov.error)}</div>`:''}
       <div class="sub">${ov.folders?treeHtml(a):(ov.loading||!ov.error?'<div class="acc-err" style="color:var(--muted)">Ordner werden geladen…</div>':'')}</div></div>`}).join('');
   el.innerHTML=`
-    <div class="pane-head"><h1>Mail</h1><button class="btn icon theme-btn" data-act="theme" aria-label="${isDark()?'Helles Design':'Dunkles Design'}" title="Hell / Dunkel">${ic(isDark()?'sun':'moon')}</button><button class="btn primary icon" data-act="compose" aria-label="Neue E-Mail">${ic('pen')}</button></div>
+    <div class="pane-head"><h1>Mail</h1><button class="btn icon theme-btn" data-act="theme" aria-label="${isDark()?'Helles Design':'Dunkles Design'}" title="Hell / Dunkel">${ic(isDark()?'sun':'moon')}</button><button class="btn icon inbox-btn" data-act="uni" data-role="inbox" aria-label="Zu allen Posteingängen" title="Alle Posteingänge">${ic('inbox')}${iu?`<span class="ib-count">${iu>99?'99+':iu}</span>`:''}</button><button class="btn primary icon" data-act="compose" aria-label="Neue E-Mail">${ic('pen')}</button></div>
     <div class="scroll">
       <div class="label"><span>Hauptverzeichnis</span></div>
       ${uni('inbox',`Alle Posteingänge<span class="addr">${CFG.accounts.length} Adresse${CFG.accounts.length===1?'':'n'}</span>`,'all',iu?`<span class="count">${iu}</span>`:'')}
@@ -1060,6 +1066,7 @@ function accForm(a){
     <div class="field"><label for="a-name">Anzeigename</label><input id="a-name" value="${esc(a.name)}" placeholder="z. B. Privat"></div></div>
     <div class="field"><label for="a-pass">${isNew?'Passwort bzw. App-Passwort':'Neues Passwort (leer lassen = unverändert)'}</label><input id="a-pass" type="password" autocomplete="new-password"></div>
     <div class="field"><span class="fl">Farbe</span><div class="swatches" id="sw" data-c="${a.color}">${COLORS.map(c=>`<button type="button" class="swatch ${c===a.color?'on':''}" style="background:${c}" data-act="swatch" data-c="${c}" aria-label="Farbe ${c}"></button>`).join('')}</div></div>
+    <label class="check"><input type="checkbox" id="a-def" ${(!isNew&&a.id===S_().defaultFrom)||(isNew&&!CFG.accounts.length)?'checked':''}><span>Standard-Absender für neue Mails<br><small style="color:var(--muted)">Neue Mails werden immer von dieser Adresse geschrieben. Du kannst beim Schreiben trotzdem eine andere auswählen.</small></span></label>
     <details class="adv" ${pk==='other'?'open':''}><summary>Servereinstellungen</summary>
       <div class="field"><label for="a-user">Benutzername (meist die E-Mail-Adresse)</label><input id="a-user" value="${esc(a.user||'')}" placeholder="wie E-Mail-Adresse"></div>
       <div class="row3"><div class="field"><label for="a-ih">IMAP-Server</label><input id="a-ih" value="${esc(a.imapHost)}"></div><div class="field"><label for="a-ip">Port</label><input id="a-ip" inputmode="numeric" value="${esc(a.imapPort)}"></div></div>
@@ -1079,7 +1086,9 @@ function accForm(a){
   $('a-save').onclick=async()=>{const b=$('a-save');b.disabled=true;b.textContent='Verbindung wird geprüft…';$('a-err').hidden=true;
     try{const r=await api('saveAccount',{account:{id:a.id,name:$('a-name').value,email:$('a-mail').value.trim(),pass:$('a-pass').value,color:$('sw').dataset.c,
       user:$('a-user').value,imapHost:$('a-ih').value,imapPort:$('a-ip').value,smtpHost:$('a-sh').value,smtpPort:$('a-sp').value}});
-      CFG=await api('config');closeModal();toast(isNew?'Konto verbunden':'Konto gespeichert');renderSide();
+      const wantDef=$('a-def')&&$('a-def').checked;CFG=await api('config');
+      if(wantDef&&S_().defaultFrom!==r.account.id)await saveSet({defaultFrom:r.account.id});
+      closeModal();toast(isNew?'Konto verbunden':(wantDef?'Gespeichert – Standard-Absender':'Konto gespeichert'));renderSide();
       OV[r.account.id]={loading:true};loadOverviews();if(isNew){V={type:'uni',role:'inbox'}}loadList();}
     catch(e){showErr('a-err',e.message);b.disabled=false;b.textContent=isNew?'Verbinden':'Speichern'}};
 }
@@ -1477,13 +1486,13 @@ document.addEventListener('selectionchange',()=>{if($('c-body'))fmtState()});
 function compose(pre={}){
   if(!CFG.accounts.length){accForm();return}
   const df=S_().defaultFrom&&accOf(S_().defaultFrom)?S_().defaultFrom:CFG.accounts[0].id;
-  const defAcc=pre.acc||(V.type==='box'?V.acc:df);
+  const defAcc=pre.acc||df;
   const sig=sigFor(defAcc);
   const body=`<div class="gp-body">${pre.body||'<br>'}</div>${sig?`<div class="gp-sig"><br>-- <br>${sig}</div>`:'<div class="gp-sig"></div>'}${pre.html?`<div class="gp-quote"><br>${pre.html}</div>`:''}`;
   const showCc=!!(pre.cc||pre.bcc);
   modal(`<div class="c-head"><h3>${pre.title||'Neue E-Mail'}</h3><button class="btn icon closex" data-act="close" aria-label="Schließen">${ic('x')}</button></div>
     <div class="c-fields">
-      <div class="c-row"><label for="c-from">Von</label><select id="c-from" aria-label="Absender">${CFG.accounts.map(a=>`<option value="${a.id}" ${a.id===defAcc?'selected':''}>${esc(a.name)} – ${esc(a.email)}</option>`).join('')}</select><button type="button" class="btn sm" id="c-setdef" hidden title="Als Standard-Absender merken">${ic('star')}Standard</button></div>
+      <div class="c-row"><label for="c-from">Von</label><select id="c-from" aria-label="Absender">${CFG.accounts.map(a=>`<option value="${a.id}" ${a.id===defAcc?'selected':''}>${a.id===S_().defaultFrom?'★ ':''}${esc(a.name)} – ${esc(a.email)}</option>`).join('')}</select><button type="button" class="btn sm" id="c-setdef" hidden title="Als Standard-Absender merken">${ic('star')}Standard</button></div>
       <div class="c-row"><label for="c-to">An</label><input id="c-to" type="text" inputmode="email" autocomplete="off" value="${esc(pre.to||'')}" placeholder="Name, Adresse oder Gruppe"><button type="button" class="btn sm" id="c-cctog" ${showCc?'hidden':''} aria-label="Cc und Bcc hinzufügen">Cc/Bcc</button></div>
       <div class="c-row" id="c-ccrow" ${showCc?'':'hidden'}><label for="c-cc">Cc</label><input id="c-cc" type="text" inputmode="email" autocomplete="off" value="${esc(pre.cc||'')}" placeholder="Name oder Adresse"></div>
       <div class="c-row" id="c-bccrow" ${showCc?'':'hidden'}><label for="c-bcc">Bcc</label><input id="c-bcc" type="text" inputmode="email" autocomplete="off" value="${esc(pre.bcc||'')}" placeholder="Unsichtbar für andere Empfänger"></div>
