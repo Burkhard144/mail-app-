@@ -955,7 +955,13 @@ function renderRead(){
       ${html?`<iframe class="htmlframe" id="hf" title="Inhalt der E-Mail" sandbox="allow-same-origin${role==='junk'?'':' allow-popups allow-popups-to-escape-sandbox'}"></iframe>`:`<div class="text">${esc(d.text||'')}</div>`}
     </div>`;
   if(html){const f=$('hf');f.srcdoc=frameDoc(role==='junk'?html.replace(/<a\b/gi,'<span').replace(/<\/a>/gi,'</span>'):html,remote);
-    f.addEventListener('load',()=>{try{const doc=f.contentDocument;const fit=()=>{f.style.height=(doc.documentElement.scrollHeight+4)+'px'};fit();new ResizeObserver(fit).observe(doc.body);doc.querySelectorAll('img').forEach(i=>i.addEventListener('load',fit));
+    f.addEventListener('load',()=>{try{const doc=f.contentDocument;
+      /* Breite Mails (meist 600–700 px Newsletter) auf Fensterbreite verkleinern, damit nichts rechts abgeschnitten wird */
+      const fit=()=>{const de=doc.documentElement;de.style.zoom='';const w=f.clientWidth;if(!w)return;
+        const sw=Math.max(de.scrollWidth,doc.body.scrollWidth);const h0=de.scrollHeight;const z=sw>w+2?Math.max(.3,w/sw):1;
+        if(z<1)de.style.zoom=String(z);f.style.height=Math.ceil(h0*z+4)+'px'};
+      fit();[150,600,1500,3000].forEach(t=>setTimeout(fit,t));doc.querySelectorAll('img').forEach(i=>i.addEventListener('load',fit));
+      let rw=f.clientWidth;new ResizeObserver(()=>{if(Math.abs(f.clientWidth-rw)>4){rw=f.clientWidth;fit()}}).observe(f);
       doc.addEventListener('click',ev=>{const an=ev.target.closest&&ev.target.closest('a[href]');if(!an)return;ev.preventDefault();openLink(an.getAttribute('href'),an.textContent)})}catch(e){f.style.height='70vh'}});}
 }
 
