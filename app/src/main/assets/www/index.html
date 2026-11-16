@@ -255,7 +255,15 @@ details.adv summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--mu
 .mail .av-acc{position:absolute;right:-2px;bottom:-2px;width:13px;height:13px;border-radius:50%;box-shadow:0 0 0 2px var(--pane-solid,#fff)}
 .mail .date{align-self:center}
 .biglist .mail{padding:14px 12px;gap:4px 12px;margin-bottom:2px;border-radius:16px}
-.biglist .mail+.mail,.biglist .mrow+.mrow{border-top:1px solid var(--line)}
+:root{--card-bg:linear-gradient(180deg,rgba(255,255,255,.9),rgba(255,255,255,.7));--card-line:rgba(255,255,255,.75);--card-sh:0 1px 2px rgba(20,45,90,.06),0 8px 18px -10px rgba(20,45,90,.28)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--card-bg:linear-gradient(180deg,rgba(52,74,106,.62),rgba(34,52,78,.55));--card-line:rgba(255,255,255,.07);--card-sh:0 1px 2px rgba(0,0,0,.25),0 10px 20px -10px rgba(0,0,0,.6)}}
+:root[data-theme="dark"]{--card-bg:linear-gradient(180deg,rgba(52,74,106,.62),rgba(34,52,78,.55));--card-line:rgba(255,255,255,.07);--card-sh:0 1px 2px rgba(0,0,0,.25),0 10px 20px -10px rgba(0,0,0,.6)}
+#mails .mail{background:var(--card-bg);border:1px solid var(--card-line);box-shadow:inset 0 1px 0 var(--hi),var(--card-sh);margin-bottom:10px}
+#mails .mail:hover{filter:brightness(1.02)}
+#mails .mail.active{box-shadow:inset 0 1px 0 var(--hi),0 0 0 2px rgba(47,134,230,.28),var(--card-sh)}
+#mails .mail.unread{box-shadow:inset 0 1px 0 var(--hi),inset 0 -2.5px 0 rgba(47,134,230,.55),0 8px 16px -12px rgba(47,134,230,.35),var(--card-sh)}
+#mails .mail.unread.active{box-shadow:inset 0 1px 0 var(--hi),inset 0 -2.5px 0 rgba(47,134,230,.55),0 0 0 2px rgba(47,134,230,.28),var(--card-sh)}
+#mails .mrow{margin-bottom:0}
 .biglist .mail .from{font-size:18px}
 .biglist .mail .date{font-size:14px}
 .biglist .mail .subj{font-size:16.5px}
