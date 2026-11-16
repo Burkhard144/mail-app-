@@ -157,6 +157,33 @@ class Bridge(private val act: MainActivity) {
                 MailService.showNotification(act, n, forceSystem = true)
                 return n
             }
+            "diag" -> {
+                val pm = act.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+                val d = store.getJson("diag")
+                val accs = JSONArray()
+                store.accounts().forEach { a -> accs.put((d.optJSONObject(a.getString("id")) ?: JSONObject()).put("id", a.getString("id")).put("name", a.optString("name").ifBlank { a.optString("email") }).put("email", a.optString("email"))) }
+                return ok().put("service", Diag.serviceOn).put("serviceSince", Diag.serviceSince)
+                    .put("notifications", androidx.core.app.NotificationManagerCompat.from(act).areNotificationsEnabled())
+                    .put("overlay", Settings.canDrawOverlays(act))
+                    .put("battery", pm.isIgnoringBatteryOptimizations(act.packageName))
+                    .put("accounts", accs)
+            }
+            "checkNow" -> {
+                var found = 0
+                val errs = JSONArray()
+                for (a in store.accounts()) {
+                    try {
+                        val st = core.connectNew(a, store.password(a.getString("id")))
+                        try {
+                            val inbox = st.getFolder("INBOX") as com.sun.mail.imap.IMAPFolder
+                            inbox.open(javax.mail.Folder.READ_ONLY)
+                            try { found += MailService.checkNew(act, a, inbox) } finally { try { inbox.close(false) } catch (_: Exception) {} }
+                        } finally { try { st.close() } catch (_: Exception) {} }
+                    } catch (e: Exception) { errs.put(core.friendly(e, a).message) }
+                }
+                MailService.start(act)
+                return ok().put("found", found).put("errors", errs)
+            }
             "ensureOverlay" -> {
                 if (!Settings.canDrawOverlays(act)) act.runOnUiThread {
                     try { act.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + act.packageName))) } catch (_: Exception) {}

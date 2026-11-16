@@ -235,6 +235,14 @@ details.adv summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--mu
 .atts .chip{border-radius:12px}
 
 /* ===== Glas-Auswahl ===== */
+.diag{list-style:none;padding:0;margin:0 0 10px;display:grid;gap:6px}
+.diag li{display:flex;gap:8px;align-items:center;font-size:14px}
+.diag li svg{width:18px;height:18px;flex:none}
+.diag li.on svg{color:var(--ok)}
+.diag li.off{color:var(--danger)}
+.diag-acc{display:grid;gap:2px;padding:8px 0;border-top:1px solid var(--line)}
+.diag-acc small{color:var(--muted);font-size:13px}
+.row-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .pw-wrap{position:relative;display:block}
 .pw-wrap input{width:100%;padding-right:58px;box-sizing:border-box}
 .pw-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:44px;height:38px;border-radius:12px;border:1px solid var(--line);display:grid;place-items:center;color:var(--muted);cursor:pointer;
@@ -1599,6 +1607,20 @@ function copyCode(btn){const code=btn.dataset.code;try{MailBridge.copy(code)}cat
 function selectCode(){const el=$('n-codev');if(!el)return;const r=document.createRange();r.selectNodeContents(el);const s=getSelection();s.removeAllRanges();s.addRange(r);toast('Code markiert – jetzt über das Menü kopieren')}
 async function demoIncoming(){try{const n=await api('inject');loadOverviews();if(V.type==='uni'||V.type==='box')loadList(true);notifyPopup(n)}catch(e){}}
 
+/* ---- Status der Hintergrund-Überwachung ---- */
+const agoL=x=>{const s=(Date.now()-x)/1000;return s<60?'gerade eben':s<3600?'vor '+Math.floor(s/60)+' Min':s<86400?'vor '+Math.floor(s/3600)+' Std':new Date(x).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'})};
+async function loadDiag(){const box=$('ndiag');if(!box)return;
+  if(!box.innerHTML)box.innerHTML='<span class="fl">Status</span><p class="hint" style="margin:0">Wird geprüft …</p>';
+  let d;try{d=await api('diag')}catch(e){box.innerHTML=`<span class="fl">Status</span><p class="errtxt">${esc(e.message)}</p>`;return}
+  if(!$('ndiag'))return;
+  const li=(b,yes,no)=>`<li class="${b?'on':'off'}">${ic(b?'tick':'x')}<span>${b?yes:no}</span></li>`;
+  box.innerHTML=`<span class="fl">Status</span><ul class="diag">${li(d.service,'Hintergrund-Überwachung läuft','Hintergrund-Überwachung läuft nicht')}${li(d.notifications,'Benachrichtigungen erlaubt','Benachrichtigungen sind in Android ausgeschaltet')}${li(d.battery,'Akku: keine Einschränkungen','Akku-Optimierung ist an – HyperOS kann die App schlafen schicken')}</ul>
+    ${(d.accounts||[]).map(a=>`<div class="diag-acc"><b>${esc(a.name||a.email||'')}</b><small>${a.state==='verbunden'?'✓ verbunden':a.state==='getrennt'?'✗ getrennt':'noch keine Verbindung'}${a.stateAt?' · '+agoL(a.stateAt):''}</small>${a.checkAt?`<small>Zuletzt nachgesehen: ${agoL(a.checkAt)}</small>`:''}${a.notifyAt?`<small>Letzte Meldung: ${agoL(a.notifyAt)} – ${esc(a.notifySubject||'')}</small>`:''}${a.error&&a.state!=='verbunden'?`<small class="errtxt" style="margin:0">${esc(a.error)}</small>`:''}</div>`).join('')}
+    <div class="row-btns"><button class="btn" id="nd-refresh">${ic('refresh')}Status aktualisieren</button><button class="btn" id="nd-check">${ic('mailopen')}Jetzt nachsehen</button></div>`;
+  $('nd-refresh').onclick=loadDiag;
+  $('nd-check').onclick=async()=>{const b=$('nd-check');b.disabled=true;b.textContent='Sehe nach …';
+    try{const r=await api('checkNow');toast(r.found?`${r.found} neue Mail${r.found===1?'':'s'} gefunden`:(r.errors&&r.errors.length?r.errors[0]:'Keine neuen Mails'))}catch(e){toast(e.message)}loadDiag()}}
+
 /* ---- Einstellungen ---- */
 const SECS=[
   ['look','Darstellung','sun',()=>({auto:'Automatisch',light:'Hell',dark:'Dunkel'})[THEME]+' · '+(VIEW==='preview'?'mit Textvorschau':'Absender und Betreff')],
@@ -1648,6 +1670,7 @@ function renderSettings(){
       ${swH('n-code',n.code!==false,'Codes erkennen','Bestätigungscodes, z. B. von Vercel, bekommen einen Knopf „Code kopieren“.')}
       ${swH('n-preview',n.preview!==false,'Text der Mail im Fenster zeigen','Der Text lässt sich lange antippen und teilweise kopieren.')}
       ${swH('n-sound',n.sound!==false,'Ton und Vibration','')}</div>
+      <div class="sgroup" id="ndiag"></div>
       <button class="btn primary" data-act="testnotif">${ic('bell')}Test-Benachrichtigung</button>
       <p class="hint" style="margin-top:12px">Bei deinem Xiaomi einmal einstellen: Einstellungen → Apps → Mail → Akku: „Keine Einschränkungen“ und Autostart an. Sonst schickt HyperOS die App schlafen.</p><button class="btn fitbtn" id="bat-open">${ic('gear')}App-Einstellungen öffnen</button>`}
   if(sec==='accounts'){h=`<span class="fl" style="margin:2px 0 8px">Signaturen</span>`+sigList().map(sg=>`<div class="sgroup sig-card">
@@ -1733,6 +1756,7 @@ function renderSettings(){
   onSw('l-on',v=>setAndRefresh({lock:{...(S_().lock||{}),on:v}},v?'Fingerabdruck/PIN ist an':'Fingerabdruck/PIN ist aus').then(()=>{renderRead();renderSide()}));
   onSeg('l-after',v=>setAndRefresh({lock:{...(S_().lock||{}),after:Number(v)}}));
   onSw('l-shot',v=>setAndRefresh({screenshots:v},v?'Bildschirmfotos erlaubt':'Bildschirmfotos gesperrt'));
+  if($('ndiag'))loadDiag();
   if($('bk-go'))$('bk-go').onclick=async()=>{const p1=$('bk-p1').value,p2=$('bk-p2').value;$('bk-err').hidden=true;
     if(p1.length<6)return showErr('bk-err','Das Sicherungs-Passwort braucht mindestens 6 Zeichen.');
     if(p1!==p2)return showErr('bk-err','Die beiden Passwörter stimmen nicht überein.');

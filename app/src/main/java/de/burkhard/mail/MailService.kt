@@ -41,7 +41,9 @@ import javax.mail.internet.InternetAddress
  */
 class MailService : Service() {
     private val threads = mutableListOf<Thread>()
-    @Volatile private var running = false
+    /** Jede Neustart-Runde bekommt eine Nummer; alte Überwachungen beenden sich, sobald die Nummer nicht mehr stimmt. */
+    @Volatile private var gen = 0
+    private val liveStores = java.util.concurrent.ConcurrentHashMap<Thread, com.sun.mail.imap.IMAPStore>()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -55,32 +57,46 @@ class MailService : Service() {
         // Android 15+ beendet "dataSync"-Dienste nach 6 Stunden – für Mail-Benachrichtigungen ist "remoteMessaging" der richtige Typ
         if (Build.VERSION.SDK_INT >= 34) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING)
         else if (Build.VERSION.SDK_INT >= 29) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) else startForeground(1, n)
-        restartWatchers()
+        // Nur neu verbinden, wenn noch keine Überwachung läuft oder Konten/Einstellungen geändert wurden
+        val reload = intent?.action == ACTION_RELOAD
+        if (reload || threads.none { it.isAlive }) restartWatchers()
         return START_STICKY
     }
 
-    private fun restartWatchers() {
-        running = false
+    private fun stopWatchers() {
+        gen++
+        // Verbindungen schließen – das beendet auch eine blockierende IDLE-Wartezeit sofort
+        liveStores.values.forEach { s -> Thread { try { s.close() } catch (_: Exception) {} }.start() }
+        liveStores.clear()
         threads.forEach { it.interrupt() }
         threads.clear()
+        Diag.service(false)
+    }
+
+    private fun restartWatchers() {
+        stopWatchers()
         val app = MailApp.app
         val cfg = app.store.load()
         if (cfg.getJSONObject("settings").optJSONObject("notify")?.optBoolean("instant", true) == false || app.store.accounts().isEmpty()) {
             stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); return
         }
-        running = true
+        val my = gen
         for (acc in app.store.accounts()) {
-            val t = Thread({ watch(acc) }, "idle-" + acc.optString("id"))
+            val t = Thread({ watch(acc, my) }, "idle-" + acc.optString("id"))
             t.isDaemon = true; t.start(); threads += t
         }
+        Diag.service(true)
     }
 
-    private fun watch(acc: JSONObject) {
+    private fun watch(acc: JSONObject, my: Int) {
         val app = MailApp.app
+        val id = acc.getString("id")
         var backoff = 5_000L
-        while (running && !Thread.currentThread().isInterrupted) {
+        while (gen == my && !Thread.currentThread().isInterrupted) {
             try {
-                val st = app.core.connectNew(acc, app.store.password(acc.getString("id")), idle = true)
+                val st = app.core.connectNew(acc, app.store.password(id), idle = true)
+                if (gen != my) { try { st.close() } catch (_: Exception) {}; return }
+                liveStores[Thread.currentThread()] = st
                 val dog = java.util.Timer(true)
                 try {
                     val inbox = st.getFolder("INBOX") as IMAPFolder
@@ -93,34 +109,46 @@ class MailService : Service() {
                         }
                     })
                     backoff = 5_000L
+                    Diag.acc(id, "verbunden", null)
                     // Alle 8 Minuten kurz anstupsen, damit Handynetz/Router die stille Verbindung nicht kappen
                     dog.schedule(object : java.util.TimerTask() {
-                        override fun run() { try { inbox.messageCount } catch (_: Exception) {} }
+                        override fun run() { try { inbox.messageCount; Diag.acc(id, "verbunden", null) } catch (_: Exception) {} }
                     }, 8 * 60_000L, 8 * 60_000L)
-                    while (running && !Thread.currentThread().isInterrupted && inbox.isOpen) {
+                    while (gen == my && !Thread.currentThread().isInterrupted && inbox.isOpen) {
                         inbox.idle(true)
                     }
-                } finally { dog.cancel(); try { st.close() } catch (_: Exception) {} }
-            } catch (_: InterruptedException) { return } catch (_: Exception) {
+                } finally { dog.cancel(); liveStores.remove(Thread.currentThread()); try { st.close() } catch (_: Exception) {} }
+            } catch (_: InterruptedException) { return } catch (e: Exception) {
+                if (gen != my) return
+                Diag.acc(id, "getrennt", app.core.friendly(e, acc).message)
                 try { Thread.sleep(backoff) } catch (_: InterruptedException) { return }
                 backoff = minOf(backoff * 2, 5 * 60_000L)
             }
         }
     }
 
-    override fun onDestroy() { running = false; threads.forEach { it.interrupt() }; super.onDestroy() }
+    override fun onDestroy() { stopWatchers(); super.onDestroy() }
 
     object App { @Volatile var foreground = false }
 
     companion object {
         const val ACTION_NEW_MAIL = "de.burkhard.mail.NEW_MAIL"
+        const val ACTION_RELOAD = "de.burkhard.mail.RELOAD"
         private val newLock = Any()
 
         /** Meldet alle Mails im Posteingang, die neuer sind als die zuletzt gemeldete (für Dienst und 15-Minuten-Prüfung). */
-        fun checkNew(ctx: Context, acc: JSONObject, inbox: IMAPFolder) {
+        fun checkNew(ctx: Context, acc: JSONObject, inbox: IMAPFolder): Int {
             val store = MailApp.app.store
             val id = acc.getString("id")
+            var found = 0
             synchronized(newLock) {
+                try { return checkNewLocked(ctx, acc, inbox, store, id).also { found = it } } finally { Diag.checked(id, found) }
+            }
+        }
+
+        private fun checkNewLocked(ctx: Context, acc: JSONObject, inbox: IMAPFolder, store: Store, id: String): Int {
+            var count = 0
+            run {
                 val seen = store.getJson("lastuid")
                 val last = seen.optLong(id, -1L)
                 val uv = inbox.uidValidity
@@ -131,7 +159,7 @@ class MailService : Service() {
                         if (c > 0) inbox.getUID(inbox.getMessage(c)) else 0L
                     }
                     seen.put(id, top).put(id + "_uv", uv); store.putJson("lastuid", seen)
-                    return
+                    return 0
                 }
                 val msgs = inbox.getMessagesByUID(last + 1, javax.mail.UIDFolder.LASTUID)
                 var max = last
@@ -142,10 +170,12 @@ class MailService : Service() {
                     if (uid <= last) continue
                     if (uid > max) max = uid
                     val d = (m.receivedDate ?: m.sentDate)?.time ?: System.currentTimeMillis()
+                    count++
                     if (d >= cutoff) try { onNewMail(ctx, acc, inbox, m) } catch (_: Exception) {}
                 }
                 if (max > last) { seen.put(id, max); store.putJson("lastuid", seen) }
             }
+            return count
         }
 
     private fun onNewMail(ctx: Context, acc: JSONObject, inbox: IMAPFolder, m: Message) {
@@ -166,7 +196,7 @@ class MailService : Service() {
         if (!sc.blocked) {
             val i = Intent(ACTION_NEW_MAIL).setPackage(ctx.packageName).putExtra("json", n.toString())
             ctx.sendBroadcast(i)
-            if (!App.foreground) showNotification(ctx, n)
+            if (!App.foreground) { showNotification(ctx, n); Diag.notified(acc.getString("id"), subject) }
         }
         // Abwesenheitsnotiz
         val away = s.optJSONObject("away")
@@ -228,7 +258,7 @@ class MailService : Service() {
             val app = MailApp.app
             if (app.store.accounts().isEmpty() || app.store.load().getJSONObject("settings").optJSONObject("notify")?.optBoolean("instant", true) == false)
                 ctx.stopService(Intent(ctx, MailService::class.java))
-            else start(ctx)
+            else try { ContextCompat.startForegroundService(ctx, Intent(ctx, MailService::class.java).setAction(ACTION_RELOAD)) } catch (_: Exception) {}
         }
 
         /** Zeigt eine neue Mail: als Fenster über anderen Apps (wenn erlaubt) oder als Benachrichtigung. */

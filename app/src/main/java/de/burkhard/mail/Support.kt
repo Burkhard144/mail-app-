@@ -72,6 +72,26 @@ class MailApp : Application() {
     }
 }
 
+/** Zustand der Hintergrund-Überwachung für die Seite „Benachrichtigungen → Status“. */
+object Diag {
+    @Volatile var serviceOn = false
+    @Volatile var serviceSince = 0L
+    private val lock = Any()
+    fun service(on: Boolean) { serviceOn = on; if (on) serviceSince = System.currentTimeMillis() }
+    private fun upd(id: String, f: (JSONObject) -> Unit) = synchronized(lock) {
+        try {
+            val st = MailApp.app.store
+            val d = st.getJson("diag"); val o = d.optJSONObject(id) ?: JSONObject(); f(o); d.put(id, o); st.putJson("diag", d)
+        } catch (_: Exception) {}
+    }
+    fun acc(id: String, state: String, err: String?) = upd(id) { o ->
+        o.put("state", state).put("stateAt", System.currentTimeMillis())
+        if (err != null) o.put("error", err).put("errorAt", System.currentTimeMillis())
+    }
+    fun checked(id: String, found: Int) = upd(id) { it.put("checkAt", System.currentTimeMillis()).put("found", found) }
+    fun notified(id: String, subject: String) = upd(id) { it.put("notifyAt", System.currentTimeMillis()).put("notifySubject", subject.take(80)) }
+}
+
 /** Prüft alle 15 Minuten die Posteingänge und meldet Mails, die der Hintergrunddienst verpasst hat. */
 class CheckWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result {
