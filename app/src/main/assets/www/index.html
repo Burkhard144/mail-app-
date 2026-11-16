@@ -5,27 +5,27 @@
 <style>
 /* Layout: drei schwebende Glasscheiben (Ordner · Liste · Lesen) über einem ruhigen Meeresverlauf; am Handy eine Scheibe nach der anderen */
 :root{
-  --bg:#d9e6ea; --blob1:#8fd3cf; --blob2:#f3c58e; --blob3:#9cc3e0;
+  --bg:#dde8f4; --blob1:#a6cdf7; --blob2:#f3c58e; --blob3:#b9d3f0;
   --glass:rgba(255,255,255,.52); --glass-strong:rgba(255,255,255,.8);
-  --hi:rgba(255,255,255,.9); --lo:rgba(20,60,70,.10); --line:rgba(255,255,255,.75);
-  --fg:#12262d; --muted:#557079; --accent:#0d8584; --accent-fg:#ffffff; --accent2:#c9711b;
-  --danger:#bf3d36; --warn-bg:rgba(217,130,43,.16); --sel:rgba(13,133,132,.14); --shadow:rgba(18,50,60,.18);
+  --hi:rgba(255,255,255,.9); --lo:rgba(20,50,90,.10); --line:rgba(255,255,255,.75);
+  --fg:#13233a; --muted:#56687f; --accent:#2f86e6; --accent-fg:#ffffff; --accent2:#c9711b;
+  --danger:#bf3d36; --warn-bg:rgba(217,130,43,.16); --sel:rgba(47,134,230,.14); --shadow:rgba(18,40,75,.18);
   --font-display:"Outfit",ui-sans-serif,system-ui,sans-serif;
   --font-body:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#09151a; --blob1:#0f5b5a; --blob2:#6b4318; --blob3:#173e5c;
-  --glass:rgba(24,44,52,.55); --glass-strong:rgba(30,54,63,.88);
+  --bg:#08121f; --blob1:#13427a; --blob2:#6b4318; --blob3:#173e5c;
+  --glass:rgba(24,38,58,.55); --glass-strong:rgba(30,46,70,.88);
   --hi:rgba(255,255,255,.12); --lo:rgba(0,0,0,.35); --line:rgba(255,255,255,.12);
-  --fg:#e3eff1; --muted:#8fa9b1; --accent:#3cc1bb; --accent-fg:#06201f; --accent2:#f0a454;
-  --danger:#ff7b72; --warn-bg:rgba(240,164,84,.14); --sel:rgba(60,193,187,.16); --shadow:rgba(0,0,0,.45); color-scheme:dark}}
+  --fg:#e3ecf6; --muted:#90a4bd; --accent:#6db4ff; --accent-fg:#06182e; --accent2:#f0a454;
+  --danger:#ff7b72; --warn-bg:rgba(240,164,84,.14); --sel:rgba(109,180,255,.16); --shadow:rgba(0,0,0,.45); color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#09151a; --blob1:#0f5b5a; --blob2:#6b4318; --blob3:#173e5c;
-  --glass:rgba(24,44,52,.55); --glass-strong:rgba(30,54,63,.88);
+  --bg:#08121f; --blob1:#13427a; --blob2:#6b4318; --blob3:#173e5c;
+  --glass:rgba(24,38,58,.55); --glass-strong:rgba(30,46,70,.88);
   --hi:rgba(255,255,255,.12); --lo:rgba(0,0,0,.35); --line:rgba(255,255,255,.12);
-  --fg:#e3eff1; --muted:#8fa9b1; --accent:#3cc1bb; --accent-fg:#06201f; --accent2:#f0a454;
-  --danger:#ff7b72; --warn-bg:rgba(240,164,84,.14); --sel:rgba(60,193,187,.16); --shadow:rgba(0,0,0,.45); color-scheme:dark}
+  --fg:#e3ecf6; --muted:#90a4bd; --accent:#6db4ff; --accent-fg:#06182e; --accent2:#f0a454;
+  --danger:#ff7b72; --warn-bg:rgba(240,164,84,.14); --sel:rgba(109,180,255,.16); --shadow:rgba(0,0,0,.45); color-scheme:dark}
 
 html,body{height:100%;margin:0}
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box;height:100%}
@@ -203,12 +203,12 @@ details.adv summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--mu
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation-duration:3s!important}}
 
 /* ===== 3D-Glasknöpfe ===== */
-:root{--btn-top:rgba(255,255,255,.98);--btn-bot:rgba(212,229,233,.94);--btn-rim:rgba(16,58,68,.22);--btn-edge:#ffffff;
-  --gloss:rgba(255,255,255,.85);--gloss2:rgba(255,255,255,.2);--accent-hi:#34b5b0;--pop-bg:rgba(246,250,251,.97);--quote:#55707a}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--btn-top:rgba(96,142,152,.6);--btn-bot:rgba(22,44,52,.96);--btn-rim:rgba(0,0,0,.6);--btn-edge:rgba(255,255,255,.3);
-  --gloss:rgba(255,255,255,.18);--gloss2:rgba(255,255,255,.03);--accent-hi:#7be3dd;--pop-bg:rgba(22,40,47,.97);--quote:#9db4bb}}
-:root[data-theme="dark"]{--btn-top:rgba(96,142,152,.6);--btn-bot:rgba(22,44,52,.96);--btn-rim:rgba(0,0,0,.6);--btn-edge:rgba(255,255,255,.3);
-  --gloss:rgba(255,255,255,.18);--gloss2:rgba(255,255,255,.03);--accent-hi:#7be3dd;--pop-bg:rgba(22,40,47,.97);--quote:#9db4bb}
+:root{--btn-top:rgba(255,255,255,.98);--btn-bot:rgba(214,227,244,.94);--btn-rim:rgba(16,44,88,.22);--btn-edge:#ffffff;
+  --gloss:rgba(255,255,255,.85);--gloss2:rgba(255,255,255,.2);--accent-hi:#5aa6f5;--pop-bg:rgba(246,249,253,.97);--quote:#566a82}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--btn-top:rgba(96,126,168,.6);--btn-bot:rgba(22,36,58,.96);--btn-rim:rgba(0,0,0,.6);--btn-edge:rgba(255,255,255,.3);
+  --gloss:rgba(255,255,255,.18);--gloss2:rgba(255,255,255,.03);--accent-hi:#9ccbff;--pop-bg:rgba(22,34,52,.97);--quote:#9db0c6}}
+:root[data-theme="dark"]{--btn-top:rgba(96,126,168,.6);--btn-bot:rgba(22,36,58,.96);--btn-rim:rgba(0,0,0,.6);--btn-edge:rgba(255,255,255,.3);
+  --gloss:rgba(255,255,255,.18);--gloss2:rgba(255,255,255,.03);--accent-hi:#9ccbff;--pop-bg:rgba(22,34,52,.97);--quote:#9db0c6}
 
 .btn,.mini,.gsel,.atts .chip,.pop-opt.on{
   border:1px solid var(--btn-rim);color:var(--fg);
@@ -368,7 +368,7 @@ details.adv summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--mu
 
 /* KI */
 .ai-btn svg{color:#8a5bd6}
-.aibox{margin-top:14px;padding:12px 14px;border-radius:16px;border:1px solid rgba(138,91,214,.35);background:linear-gradient(135deg,rgba(138,91,214,.10),rgba(13,133,132,.08))}
+.aibox{margin-top:14px;padding:12px 14px;border-radius:16px;border:1px solid rgba(138,91,214,.35);background:linear-gradient(135deg,rgba(138,91,214,.10),rgba(47,134,230,.08))}
 .ai-h{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .ai-h b{flex:1}
 .ai-h svg{width:18px;height:18px;color:#8a5bd6}
@@ -634,7 +634,7 @@ const ICON={
 const ic=(n,fill)=>`<svg viewBox="0 0 24 24" fill="${fill?'currentColor':'none'}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]||ICON.custom}</svg>`;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const $=id=>document.getElementById(id);
-const COLORS=['#0d8584','#d9822b','#3a6fb0','#b8474a','#6c8f3a','#8a5bb0','#c25b8f','#4b5563'];
+const COLORS=['#2f86e6','#d9822b','#3a6fb0','#b8474a','#6c8f3a','#8a5bb0','#c25b8f','#4b5563'];
 const ROLE_NAME={inbox:'Posteingang',sent:'Gesendet',drafts:'Entwürfe',trash:'Papierkorb',junk:'Spam',archive:'Archiv'};
 const ROLE_ORDER={inbox:0,drafts:1,sent:2,archive:3,junk:4,trash:5,custom:6};
 const PRESETS={
@@ -677,7 +677,7 @@ let LOGOS=true,BIG=true;try{LOGOS=localStorage.getItem('gp-logos')!=='0';BIG=loc
 const FREEMAIL=new Set('gmail.com googlemail.com gmx.de gmx.net gmx.at gmx.ch web.de t-online.de outlook.com outlook.de hotmail.com hotmail.de live.com live.de msn.com yahoo.com yahoo.de icloud.com me.com mac.com aol.com freenet.de arcor.de posteo.de mailbox.org protonmail.com proton.me vodafone.de online.de email.de kabelmail.de strato.de example'.split(' '));
 function baseDomain(addr){const d=(String(addr||'').split('@')[1]||'').toLowerCase().replace(/[>\s]/g,'');if(!d)return '';const p=d.split('.');
   return p.slice(/^(co|com|org|net|gov|ac)\.[a-z]{2}$/.test(p.slice(-2).join('.'))?-3:-2).join('.');}
-const AVC=['#0d8584','#c9711b','#5a6fd8','#b04a8f','#2e9e5b','#bf3d36','#7b5cc4','#1f7fb5'];
+const AVC=['#2a9d8f','#c9711b','#5a6fd8','#b04a8f','#2e9e5b','#bf3d36','#7b5cc4','#1f7fb5'];
 function initials(n){const w=String(n||'?').replace(/["'<>()]/g,'').trim().split(/[\s@._-]+/).filter(Boolean);return ((w[0]||'?')[0]+(w.length>1?w[1][0]:'')).toUpperCase()}
 function avatarHtml(m,a){const out=m.role==='sent'||m.role==='drafts';const who=out?(m.to||''):(m.from||m.fromAddr);
   const addr=out?(String(m.to||'').match(/[^\s<,]+@[^\s>,]+/)||[''])[0]:m.fromAddr;

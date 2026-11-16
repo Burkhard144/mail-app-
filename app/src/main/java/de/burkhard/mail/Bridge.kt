@@ -199,7 +199,7 @@ class Bridge(private val act: MainActivity) {
         val id = old?.optString("id") ?: ("a" + System.currentTimeMillis())
         val next = JSONObject().put("id", id)
             .put("name", i.optString("name").trim().ifBlank { email.substringBefore('@') })
-            .put("email", email).put("color", i.optString("color").ifBlank { "#0d8584" })
+            .put("email", email).put("color", i.optString("color").ifBlank { "#2f86e6" })
             .put("user", i.optString("user").trim().ifBlank { email })
             .put("imapHost", i.optString("imapHost").trim()).put("imapPort", i.optInt("imapPort", 993))
             .put("smtpHost", i.optString("smtpHost").trim()).put("smtpPort", i.optInt("smtpPort", 465))

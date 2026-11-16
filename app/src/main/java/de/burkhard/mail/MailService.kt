@@ -202,7 +202,7 @@ class MailService : Service() {
             }
             val open = Intent(ctx, MainActivity::class.java).putExtra("openMail", n.toString()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             val b = NotificationCompat.Builder(ctx, MailApp.CH_MAIL)
-                .setSmallIcon(R.drawable.ic_stat_mail).setColor(0xFF0D8584.toInt())
+                .setSmallIcon(R.drawable.ic_stat_mail).setColor(0xFF2F86E6.toInt())
                 .setContentTitle(n.optString("from")).setContentText(n.optString("subject"))
                 .setStyle(NotificationCompat.BigTextStyle().bigText(n.optString("subject") + (if (s.optBoolean("preview", true)) "\n" + n.optString("text").take(300) else "")))
                 .setPriority(NotificationCompat.PRIORITY_HIGH).setCategory(NotificationCompat.CATEGORY_EMAIL)
@@ -232,7 +232,7 @@ object Overlay {
         val dark = (ctx.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
         val fg = if (dark) Color.parseColor("#E3EFF1") else Color.parseColor("#12262D")
         val muted = if (dark) Color.parseColor("#8FA9B1") else Color.parseColor("#557079")
-        val accent = Color.parseColor("#0D8584")
+        val accent = Color.parseColor("#2F86E6")
         val box = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(14), dp(16), dp(12))
@@ -246,7 +246,7 @@ object Overlay {
         fun btn(t: String, primary: Boolean, click: () -> Unit) = Button(ctx).apply {
             text = t; isAllCaps = false; setTextColor(if (primary) Color.WHITE else fg)
             background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                if (primary) intArrayOf(Color.parseColor("#34B5B0"), accent) else if (dark) intArrayOf(Color.parseColor("#3E6670"), Color.parseColor("#16303A")) else intArrayOf(Color.WHITE, Color.parseColor("#D4E5E9"))).apply { cornerRadius = dp(14).toFloat() }
+                if (primary) intArrayOf(Color.parseColor("#5AA6F5"), accent) else if (dark) intArrayOf(Color.parseColor("#3E5878"), Color.parseColor("#16263E")) else intArrayOf(Color.WHITE, Color.parseColor("#D6E3F4"))).apply { cornerRadius = dp(14).toFloat() }
             setOnClickListener { click() }
         }
         box.addView(tv("Mail · neue E-Mail", 12f, muted))
