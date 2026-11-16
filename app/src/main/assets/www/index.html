@@ -652,6 +652,12 @@ const PRESETS={
     hint:'Bei GMX zuerst im Webmailer unter E-Mail → Einstellungen → POP3/IMAP Abruf den Zugriff per IMAP erlauben. Bei aktiver Zwei-Faktor-Anmeldung ein App-Passwort anlegen.'},
   webde:{label:'WEB.DE',imapHost:'imap.web.de',imapPort:993,smtpHost:'smtp.web.de',smtpPort:587,match:/@web\.de$/i,
     hint:'Bei WEB.DE zuerst im Webmailer unter Einstellungen → POP3/IMAP Abruf den Zugriff per IMAP erlauben. Bei aktiver Zwei-Faktor-Anmeldung ein App-Passwort anlegen.'},
+  mailde:{label:'mail.de',imapHost:'imap.mail.de',imapPort:993,smtpHost:'smtp.mail.de',smtpPort:465,match:/@mail\.de$/i,
+    hint:'Bei mail.de genügen deine E-Mail-Adresse und dein normales mail.de-Passwort.'},
+  tonline:{label:'T-Online',imapHost:'secureimap.t-online.de',imapPort:993,smtpHost:'securesmtp.t-online.de',smtpPort:465,match:/@(t-online|magenta)\.de$/i,
+    hint:'T-Online braucht ein eigenes E-Mail-Passwort. Du legst es im Kundencenter unter E-Mail → E-Mail-Einstellungen → Passwörter an.'},
+  icloud:{label:'iCloud',imapHost:'imap.mail.me.com',imapPort:993,smtpHost:'smtp.mail.me.com',smtpPort:587,match:/@(icloud|me|mac)\.com$/i,
+    hint:'iCloud braucht ein app-spezifisches Passwort: account.apple.com → Anmeldung und Sicherheit → App-spezifische Passwörter.'},
   strato:{label:'STRATO',imapHost:'imap.strato.de',imapPort:993,smtpHost:'smtp.strato.de',smtpPort:465,match:null,
     hint:'Bei STRATO ist der Benutzername die vollständige E-Mail-Adresse, das Passwort ist das Postfach-Passwort aus dem STRATO-Kundenlogin.'},
   other:{label:'Anderer Anbieter',imapHost:'',imapPort:993,smtpHost:'',smtpPort:465,match:null,hint:'Die Serverdaten findest du in der Hilfe deines Anbieters unter „IMAP“ und „SMTP“.'}
@@ -1032,7 +1038,11 @@ function accForm(a){
   const apply=k=>{const p=PRESETS[k];$('a-hint').textContent=p.hint;if(k!=='other'){$('a-ih').value=p.imapHost;$('a-ip').value=p.imapPort;$('a-sh').value=p.smtpHost;$('a-sp').value=p.smtpPort}};
   if(isNew)apply(pk);
   $('a-prov').onchange=e=>apply(e.target.value);
-  $('a-mail').addEventListener('change',e=>{const k=detectPreset(e.target.value.trim());if(k&&isNew){$('a-prov').value=k;gsLabel($('a-prov'));apply(k)}});
+  const autoProv=()=>{if(!isNew)return;const em=$('a-mail').value.trim();const dom=(em.split('@')[1]||'').toLowerCase();if(!/\./.test(dom))return;
+    const k=detectPreset(em)||'other';if($('a-prov').value!==k){$('a-prov').value=k;gsLabel($('a-prov'));apply(k)}
+    if(k==='other'){if(!$('a-ih').dataset.touched)$('a-ih').value='imap.'+dom;if(!$('a-sh').dataset.touched)$('a-sh').value='smtp.'+dom;$('a-ip').value=993;$('a-sp').value=465;$('a-hint').textContent='Diesen Anbieter kennt Mail noch nicht. Die Server sind geschätzt (imap.'+dom+' / smtp.'+dom+'). Falls die Verbindung scheitert, die richtigen Daten aus der Hilfe deines Anbieters unter „Servereinstellungen“ eintragen.'}};
+  $('a-mail').addEventListener('input',autoProv);$('a-mail').addEventListener('change',autoProv);
+  ['a-ih','a-sh'].forEach(id=>$(id).addEventListener('input',()=>{$(id).dataset.touched='1'}));
   $('a-save').onclick=async()=>{const b=$('a-save');b.disabled=true;b.textContent='Verbindung wird geprüft…';$('a-err').hidden=true;
     try{const r=await api('saveAccount',{account:{id:a.id,name:$('a-name').value,email:$('a-mail').value.trim(),pass:$('a-pass').value,color:$('sw').dataset.c,
       user:$('a-user').value,imapHost:$('a-ih').value,imapPort:$('a-ip').value,smtpHost:$('a-sh').value,smtpPort:$('a-sp').value}});
