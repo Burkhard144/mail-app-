@@ -602,6 +602,9 @@ const ICON={
   junk:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 9l6 6M15 9l-6 6"/>',
   shield:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5"/>',
   archive:'<path d="M3 5h18v4H3zM5 9v10h14V9M10 13h4"/>',
+  download:'<path d="M12 3v12M7 10l5 5 5-5M4 20h16"/>',
+  upload:'<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>',
+  share:'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>',
   custom:'<path d="M3 6h6l2 2h10v11H3z"/>',
   star:'<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
   all:'<path d="M4 6h16v12H4zM4 7l8 6 8-6"/>',
@@ -1592,6 +1595,7 @@ const SECS=[
   ['ai','KI-Assistent','spark',()=>S_().ai===false?'Aus':'Korrektur, Zusammenfassung, Vorschläge'],
   ['contacts','Kontakte vom Handy','phone',()=>S_().phoneSuggest===false?'Vorschläge aus':'Vorschläge an'],
   ['security','Fingerabdruck und Sicherheit','lock',()=>((S_().lock||{}).on===false?'Ohne Fingerabdruck/PIN':'Fingerabdruck/PIN an')+' · Bildschirmfotos '+(S_().screenshots===false?'gesperrt':'erlaubt')],
+  ['backup','Sichern und Wiederherstellen','download',()=>S_().lastBackup?'Zuletzt gesichert am '+new Date(S_().lastBackup).toLocaleDateString('de-DE'):'Noch keine Sicherung'],
   ['storage','Speicher','archive',()=>`Zwischenspeicher ${CACHE_MB.toLocaleString('de-DE')} MB`]];
 const fmtDay=s=>{try{return new Date(s).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'})}catch(e){return s}};
 function awayActive(){const a=S_().away||{};if(!a.on)return false;const t=new Date().toISOString().slice(0,10);return (!a.from||a.from<=t)&&(!a.to||a.to>=t)}
@@ -1665,6 +1669,19 @@ function renderSettings(){
       ${l.on===false?'':`<span class="fl">Sperren, wenn Mail im Hintergrund war</span>${segH('l-after',[[0,'Sofort'],[1,'1 Min'],[5,'5 Min'],[15,'15 Min']],Number(l.after??1))}`}</div>
       <div class="sgroup">${swH('l-shot',s.screenshots!==false,'Bildschirmfotos erlauben','Aus: Android verhindert Screenshots von Mail und zeigt die App im App-Wechsler unscharf.')}</div>
       <p class="hint">Links aus Mails öffnen immer in deinem Standard-Browser.</p>`}
+  if(sec==='backup'){const lb=s.lastBackup;h=`<div class="sgroup"><span class="fl">Sichern</span>
+      <p class="hint" style="margin-top:0">Speichert alle Konten mit Passwörtern, Signaturen, Adressbuch, Gruppen, Spamregeln und Einstellungen verschlüsselt in einer Datei im Download-Ordner. Deine Mails selbst bleiben auf den Servern und sind nicht in der Datei.</p>
+      <div class="field"><label for="bk-p1">Sicherungs-Passwort (mindestens 6 Zeichen)</label><input id="bk-p1" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="bk-p2">Sicherungs-Passwort wiederholen</label><input id="bk-p2" type="password" autocomplete="new-password"></div>
+      <p class="errtxt" id="bk-err" hidden></p>
+      <button class="btn primary" id="bk-go">${ic('download')}Sicherung erstellen</button>
+      <div id="bk-done"></div>
+      ${lb?`<p class="hint">Letzte Sicherung: ${new Date(lb).toLocaleString('de-DE',{dateStyle:'medium',timeStyle:'short'})}</p>`:''}
+      <p class="hint box">Merke dir das Sicherungs-Passwort gut. Ohne dieses Passwort lässt sich die Datei nicht mehr öffnen.</p></div>
+    <div class="sgroup"><span class="fl">Wiederherstellen</span>
+      <p class="hint" style="margin-top:0">Liest eine Sicherungsdatei ein. Konten und Einstellungen aus der Datei ersetzen die jetzigen.</p>
+      <button class="btn" id="rs-pick">${ic('upload')}Sicherungsdatei auswählen</button>
+      <div id="rs-step" hidden></div></div>`}
   if(sec==='storage'){h=`<div class="sgroup"><div class="cache"><span class="big">${CACHE_MB.toLocaleString('de-DE')} MB</span><span>Zwischenspeicher: geladene Mails, Anhänge, Bilder</span></div>
       <button class="btn danger" id="c-clear" ${CACHE_MB?'':'disabled'}>${ic('trash')}Zwischenspeicher leeren</button></div>
       <p class="hint">Deine Mails bleiben auf den Servern, Konten, Adressbuch und Einstellungen bleiben erhalten. Mails werden danach beim Öffnen neu geladen.</p>`}
@@ -1700,6 +1717,23 @@ function renderSettings(){
   onSw('l-on',v=>setAndRefresh({lock:{...(S_().lock||{}),on:v}},v?'Fingerabdruck/PIN ist an':'Fingerabdruck/PIN ist aus').then(()=>{renderRead();renderSide()}));
   onSeg('l-after',v=>setAndRefresh({lock:{...(S_().lock||{}),after:Number(v)}}));
   onSw('l-shot',v=>setAndRefresh({screenshots:v},v?'Bildschirmfotos erlaubt':'Bildschirmfotos gesperrt'));
+  if($('bk-go'))$('bk-go').onclick=async()=>{const p1=$('bk-p1').value,p2=$('bk-p2').value;$('bk-err').hidden=true;
+    if(p1.length<6)return showErr('bk-err','Das Sicherungs-Passwort braucht mindestens 6 Zeichen.');
+    if(p1!==p2)return showErr('bk-err','Die beiden Passwörter stimmen nicht überein.');
+    const b=$('bk-go');b.disabled=true;b.textContent='Sicherung wird erstellt …';
+    try{const local={};try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(/^gp-/.test(k)&&k!=='gp-lc')local[k]=localStorage.getItem(k)}}catch(_){}
+      const r=await api('backupCreate',{pass:p1,local});CFG.settings.lastBackup=Date.now();$('bk-p1').value='';$('bk-p2').value='';
+      $('bk-done').innerHTML=`<p class="hint box">✓ Gespeichert im Download-Ordner als <b>${esc(r.name)}</b></p>`;toast('Sicherung gespeichert');renderSettingsList()}
+    catch(e){showErr('bk-err',e.message)}finally{b.disabled=false;b.innerHTML=ic('download')+'Sicherung erstellen'}};
+  if($('rs-pick'))$('rs-pick').onclick=async()=>{let r;try{r=await api('backupPick',{})}catch(e){return toast(e.message)}if(!r||!r.data)return;
+    const st=$('rs-step');st.hidden=false;
+    st.innerHTML=`<p class="hint">Datei: <b>${esc(r.name||'Sicherung')}</b></p><div class="field"><label for="rs-p">Sicherungs-Passwort</label><input id="rs-p" type="password" autocomplete="off"></div><p class="errtxt" id="rs-err" hidden></p><button class="btn primary" id="rs-go">${ic('upload')}Wiederherstellen</button>`;
+    pwToggles(st);$('rs-p').focus();
+    $('rs-go').onclick=async()=>{const pw=$('rs-p').value;$('rs-err').hidden=true;if(!pw)return showErr('rs-err','Bitte das Sicherungs-Passwort eingeben.');
+      const b=$('rs-go');b.disabled=true;b.textContent='Wird wiederhergestellt …';
+      try{const r2=await api('backupRestore',{data:r.data,pass:pw});try{Object.entries(r2.local||{}).forEach(([k,v])=>localStorage.setItem(k,v));localStorage.removeItem('gp-lc')}catch(_){}st.innerHTML=`<p class="hint box">✓ ${r2.accounts} Konten und alle Einstellungen wiederhergestellt.</p>`;toast('Wiederhergestellt');
+        if(window.MailBridge)setTimeout(()=>location.reload(),1200)}
+      catch(e){showErr('rs-err',e.message);b.disabled=false;b.innerHTML=ic('upload')+'Wiederherstellen'}}};
   if($('c-clear'))$('c-clear').onclick=()=>{modal(`<h3>Zwischenspeicher leeren?</h3><p class="hint">${CACHE_MB.toLocaleString('de-DE')} MB werden freigegeben. Mails und Konten bleiben erhalten.</p><div class="actions"><button class="btn" data-act="close">Abbrechen</button><button class="btn dangerfill" id="cc-go">Leeren</button></div>`,'sheet');
     $('cc-go').onclick=()=>{api('clearCache').catch(()=>{});CACHE_MB=0;closeModal();renderSettingsList();renderRead();toast('Zwischenspeicher geleert')}};
 }

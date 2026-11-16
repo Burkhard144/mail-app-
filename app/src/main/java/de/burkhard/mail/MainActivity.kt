@@ -17,6 +17,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
@@ -105,6 +106,7 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         MailService.App.foreground = true
         Overlay.close(this)
+        if (skipLockOnce) { skipLockOnce = false; return }
         val lock = MailApp.app.store.load().getJSONObject("settings").optJSONObject("lock")
         val on = lock?.optBoolean("on", true) ?: true
         val after = (lock?.optInt("after", 1) ?: 1) * 60_000L
@@ -146,6 +148,21 @@ class MainActivity : AppCompatActivity() {
         val info = BiometricPrompt.PromptInfo.Builder().setTitle("Mail entsperren").setSubtitle("Mit Fingerabdruck oder Handy-PIN")
             .setAllowedAuthenticators(auth).apply { if (Build.VERSION.SDK_INT < 30) setNegativeButtonText("Abbrechen") }.build()
         prompt.authenticate(info)
+    }
+
+    // ---------- Datei auswählen (Sicherung wiederherstellen) ----------
+    /** Beim Zurückkommen aus Dateiauswahl oder Teilen-Menü nicht sperren. */
+    @Volatile var skipLockOnce = false
+    private var pickLatch: CountDownLatch? = null
+    private var pickResult: Uri? = null
+    private val picker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> pickResult = uri; pickLatch?.countDown() }
+
+    fun pickFileBlocking(): Uri? {
+        val l = CountDownLatch(1); pickLatch = l; pickResult = null
+        skipLockOnce = true
+        runOnUiThread { try { picker.launch(arrayOf("*/*")) } catch (_: Exception) { l.countDown() } }
+        l.await(600, TimeUnit.SECONDS)
+        return pickResult
     }
 
     // ---------- Berechtigungen (vom Hintergrund-Thread aus) ----------

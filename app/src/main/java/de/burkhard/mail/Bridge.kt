@@ -176,8 +176,56 @@ class Bridge(private val act: MainActivity) {
                 act.runOnUiThread { try { act.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + act.packageName))) } catch (_: Exception) {} }
                 return ok()
             }
+            "backupCreate" -> return backupCreate(b)
+            "backupShare" -> {
+                val f = File(act.cacheDir, "att").listFiles { x -> x.name.endsWith(".mailbackup") }?.maxByOrNull { it.lastModified() }
+                    ?: throw UserError("Bitte zuerst eine Sicherung erstellen.")
+                val uri = FileProvider.getUriForFile(act, act.packageName + ".files", f)
+                val send = Intent(Intent.ACTION_SEND).apply { setType("application/octet-stream"); putExtra(Intent.EXTRA_STREAM, uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                act.skipLockOnce = true
+                act.runOnUiThread { act.startActivity(Intent.createChooser(send, "Sicherung ablegen in …")) }
+                return ok()
+            }
+            "backupPick" -> {
+                val uri = act.pickFileBlocking() ?: return ok()
+                var name = "Sicherung"
+                act.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) name = it.getString(0) ?: name }
+                val bytes = act.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: throw UserError("Die Datei lässt sich nicht lesen.")
+                if (bytes.size > 5_000_000) throw UserError("Das ist keine Sicherungsdatei von Mail.")
+                return ok().put("name", name).put("data", String(bytes, Charsets.UTF_8))
+            }
+            "backupRestore" -> {
+                val r = Backup.restore(store, b.getString("data"), b.getString("pass"))
+                core.dropAll()
+                MailService.reload(act)
+                return r
+            }
             else -> throw UserError("Unbekannte Aktion.")
         }
+    }
+
+    /** Verschlüsselte Sicherung in den Download-Ordner schreiben (Kopie für „Zusätzlich ablegen“ im App-Speicher). */
+    private fun backupCreate(b: JSONObject): JSONObject {
+        val text = Backup.create(store, b.getString("pass"), b.optJSONObject("local"))
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.GERMANY).format(java.util.Date())
+        var name = "Mail-Sicherung-$day.mailbackup"
+        val dir = File(act.cacheDir, "att").apply { mkdirs() }
+        dir.listFiles { x -> x.name.endsWith(".mailbackup") }?.forEach { it.delete() }
+        File(dir, name).writeBytes(bytes)
+        if (Build.VERSION.SDK_INT >= 29) {
+            val values = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, name); put(MediaStore.Downloads.MIME_TYPE, "application/octet-stream")
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            }
+            val uri = act.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: throw UserError("Speichern im Download-Ordner nicht möglich.")
+            act.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: throw UserError("Speichern im Download-Ordner nicht möglich.")
+            act.contentResolver.query(uri, arrayOf(MediaStore.Downloads.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) name = it.getString(0) ?: name }
+        } else {
+            File(act.getExternalFilesDir(null), name).writeBytes(bytes)
+        }
+        val c = store.load(); c.getJSONObject("settings").put("lastBackup", System.currentTimeMillis()); store.save(c)
+        return ok().put("name", name)
     }
 
     private fun filterOut(a: JSONArray, id: String) = JSONArray((0 until a.length()).map { a.getJSONObject(it) }.filter { it.optString("id") != id })
