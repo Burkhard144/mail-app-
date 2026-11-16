@@ -53,7 +53,7 @@ class MainActivity : AppCompatActivity() {
             allowFileAccess = false
             mediaPlaybackRequiresUserGesture = true
             setSupportMultipleWindows(false)
-            textZoom = 100
+            textZoom = (resources.configuration.fontScale * 100).toInt().coerceIn(85, 200)
         }
         web.addJavascriptInterface(Bridge(this), "MailBridge")
         web.webViewClient = object : WebViewClient() {
