@@ -107,7 +107,7 @@ class MailCore(private val store: Store) {
         }
         return JSONObject().put("map", out)
     }
-    fun drop(id: String) { dropKey(id); dropKey(id + READ); folderCache.remove(id); synchronized(readCache) { readCache.keys.removeAll { it.startsWith("$id|") } } }
+    fun drop(id: String) { dropKey(id); dropKey(id + READ); dropKey(id + "#zaehler"); folderCache.remove(id); synchronized(readCache) { readCache.keys.removeAll { it.startsWith("$id|") } } }
     fun dropAll() { stores.keys.toList().forEach { dropKey(it) }; folderCache.clear(); synchronized(readCache) { readCache.clear() } }
 
     private fun <T> withAcc(acc: JSONObject, slot: String = "", block: (IMAPStore) -> T): T {
@@ -163,11 +163,12 @@ class MailCore(private val store: Store) {
     private val SPECIAL = mapOf("\\Sent" to "sent", "\\Drafts" to "drafts", "\\Trash" to "trash", "\\Junk" to "junk",
         "\\Archive" to "archive", "\\All" to "all", "\\Flagged" to "flagged", "\\Important" to "important")
 
-    fun folders(acc: JSONObject, fresh: Boolean = false): List<FolderInfo> {
+    fun folders(acc: JSONObject, fresh: Boolean = false, slot: String = ""): List<FolderInfo> {
         val id = acc.getString("id")
         val c = folderCache[id]
-        if (!fresh && c != null && System.currentTimeMillis() - c.first < 5 * 60_000) return c.second
-        val list = withAcc(acc) { s ->
+        val age = if (c != null) System.currentTimeMillis() - c.first else Long.MAX_VALUE
+        if (age < (if (fresh) 60_000 else 5 * 60_000)) return c!!.second
+        val list = withAcc(acc, slot) { s ->
             val out = mutableListOf<FolderInfo>()
             for (f in s.defaultFolder.list("*")) {
                 val imf = f as IMAPFolder
@@ -193,11 +194,19 @@ class MailCore(private val store: Store) {
     fun byRole(fs: List<FolderInfo>, role: String) = fs.firstOrNull { it.role == role }?.path
     private fun roleOf(fs: List<FolderInfo>, path: String) = fs.firstOrNull { it.path == path }?.role ?: "custom"
 
-    fun overview(acc: JSONObject): JSONObject {
-        val fs = folders(acc, true)
+    /** Eigene Verbindung für Ordner und Zähler – blockiert so weder Liste noch Löschen/Verschieben. */
+    private val INFO = "#zaehler"
+
+    fun overview(acc: JSONObject): JSONObject = try { overviewOn(acc, INFO) } catch (e: UserError) {
+        dropKey(acc.getString("id") + INFO)
+        overviewOn(acc, "")
+    }
+
+    private fun overviewOn(acc: JSONObject, slot: String): JSONObject {
+        val fs = folders(acc, true, slot)
         val counts = JSONObject()
         val unseen = JSONObject()
-        withAcc(acc) { s ->
+        withAcc(acc, slot) { s ->
             for (f in fs.take(40)) {
                 try {
                     val fo = s.getFolder(f.path)

@@ -752,12 +752,17 @@ async function start(){
   if(!CFG.accounts.length){renderSide();renderList();setPane('side');accForm();return}
   renderSide();
   LOADING=true;renderList();
-  loadOverviews().then(()=>loadList());
+  /* Ordner vom letzten Mal sofort benutzen – Liste lädt gleich, Zähler kommen parallel dazu */
+  let saved={};try{saved=JSON.parse(localStorage.getItem('gp-ov')||'{}')}catch(e){}
+  CFG.accounts.forEach(a=>{if(saved[a.id]&&!OV[a.id])OV[a.id]=saved[a.id]});
+  if(CFG.accounts.every(a=>OV[a.id]&&OV[a.id].folders)){renderSide();loadList();loadOverviews()}
+  else loadOverviews().then(()=>loadList());
 }
 async function loadOverviews(){
   await Promise.all(CFG.accounts.map(async a=>{
     OV[a.id]={...(OV[a.id]||{}),loading:true};
-    try{const r=await api('overview',{acc:a.id});OV[a.id]={folders:r.folders,counts:r.counts,unseen:r.unseen||{}}}
+    try{const r=await api('overview',{acc:a.id});OV[a.id]={folders:r.folders,counts:r.counts,unseen:r.unseen||{}};
+      try{const keep={};CFG.accounts.forEach(x=>{if(OV[x.id]&&OV[x.id].folders)keep[x.id]={folders:OV[x.id].folders,counts:OV[x.id].counts,unseen:OV[x.id].unseen}});localStorage.setItem('gp-ov',JSON.stringify(keep))}catch(_){}}
     catch(e){OV[a.id]={...(OV[a.id]||{}),error:e.message,loading:false}}
     renderSide();
   }));
