@@ -134,6 +134,8 @@ class Bridge(private val act: MainActivity) {
             "list" -> return core.list(store.account(b.getString("acc")), b.optString("path").takeIf { it.isNotBlank() && it != "null" },
                 b.optString("role").takeIf { it.isNotBlank() && it != "null" }, b.optString("q"), minOf(200, b.optInt("limit", 50)), b.optBoolean("preview"))
             "read" -> return core.read(store.account(b.getString("acc")), b.getString("path"), b.getLong("uid"))
+            "prefetch" -> { core.read(store.account(b.getString("acc")), b.getString("path"), b.getLong("uid"), false); return ok() }
+            "previews" -> { val u = b.getJSONArray("uids"); return core.previews(store.account(b.getString("acc")), b.getString("path"), (0 until u.length()).map { u.getLong(it) }) }
             "bulk" -> return core.bulk(b.getString("op"), b.getJSONArray("items"), b.optJSONObject("dest"), b.optBoolean("learn"))
             "empty" -> return ok().put("deleted", core.empty(store.account(b.getString("acc")), b.getString("path")))
             "createFolder" -> { core.createFolder(store.account(b.getString("acc")), b.optString("parent").takeIf { it.isNotBlank() && it != "null" }, b.getString("name").trim()); return ok() }

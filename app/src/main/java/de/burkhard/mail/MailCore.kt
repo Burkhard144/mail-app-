@@ -86,7 +86,27 @@ class MailCore(private val store: Store) {
         return s
     }
 
-    private fun dropKey(key: String) { try { stores.remove(key)?.close() } catch (_: Exception) {} }
+    private fun dropKey(key: String) {
+        openRead.remove(key)?.let { try { it.close(false) } catch (_: Exception) {} }
+        try { stores.remove(key)?.close() } catch (_: Exception) {}
+    }
+
+    /** Vorschautexte nachladen, nachdem die Liste schon angezeigt wird. */
+    fun previews(acc: JSONObject, path: String, uids: List<Long>): JSONObject {
+        val out = JSONObject()
+        if (uids.isEmpty()) return JSONObject().put("map", out)
+        withAcc(acc) { s ->
+            val f = s.getFolder(path) as IMAPFolder
+            f.open(Folder.READ_ONLY)
+            try {
+                val msgs = f.getMessagesByUID(uids.toLongArray()).filterNotNull().toTypedArray()
+                val fp = FetchProfile(); fp.add(FetchProfile.Item.CONTENT_INFO); fp.add(UIDFolder.FetchProfileItem.UID)
+                f.fetch(msgs, fp)
+                for (m in msgs) try { (m as IMAPMessage).peek = true; out.put(f.getUID(m).toString(), snippet(m)) } catch (_: Exception) {}
+            } finally { try { f.close(false) } catch (_: Exception) {} }
+        }
+        return JSONObject().put("map", out)
+    }
     fun drop(id: String) { dropKey(id); dropKey(id + READ); folderCache.remove(id); synchronized(readCache) { readCache.keys.removeAll { it.startsWith("$id|") } } }
     fun dropAll() { stores.keys.toList().forEach { dropKey(it) }; folderCache.clear(); synchronized(readCache) { readCache.clear() } }
 
@@ -356,36 +376,52 @@ class MailCore(private val store: Store) {
         }
     }
 
-    fun read(acc: JSONObject, path: String, uid: Long): JSONObject {
+    /** Auf der Lese-Verbindung bleibt der zuletzt benutzte Ordner geöffnet – spart bei jeder Mail zwei Server-Rundläufe. */
+    private val openRead = ConcurrentHashMap<String, IMAPFolder>()
+
+    private fun readFolder(s: IMAPStore, key: String, path: String, keep: Boolean): IMAPFolder {
+        if (!keep) return (s.getFolder(path) as IMAPFolder).also { it.open(Folder.READ_WRITE) }
+        val cur = openRead[key]
+        if (cur != null && cur.isOpen && cur.fullName == path && cur.store === s) return cur
+        try { cur?.close(false) } catch (_: Exception) {}
+        val f = s.getFolder(path) as IMAPFolder
+        f.open(Folder.READ_WRITE)
+        openRead[key] = f
+        return f
+    }
+
+    fun read(acc: JSONObject, path: String, uid: Long, markSeen: Boolean = true): JSONObject {
         val ck = acc.getString("id") + "|" + path + "|" + uid
         synchronized(readCache) { readCache[ck] }?.let { cached ->
+            if (!markSeen) return cached
             // sofort anzeigen, „gelesen“ im Hintergrund auf dem Server setzen
             Thread {
                 try { withAcc(acc, READ) { s ->
-                    val f = s.getFolder(path) as IMAPFolder; f.open(Folder.READ_WRITE)
-                    try { f.getMessageByUID(uid)?.setFlag(Flags.Flag.SEEN, true) } finally { try { f.close(false) } catch (_: Exception) {} }
+                    readFolder(s, acc.getString("id") + READ, path, true).getMessageByUID(uid)?.setFlag(Flags.Flag.SEEN, true)
                 } } catch (_: Exception) {}
             }.start()
             return cached
         }
         val rules = store.load().getJSONObject("rules")
-        return try { readOn(acc, path, uid, READ, ck, rules) } catch (e: UserError) {
+        return try { readOn(acc, path, uid, READ, ck, rules, markSeen) } catch (e: UserError) {
             if (e.message?.contains("nicht mehr gefunden") == true) throw e
             // zweite Verbindung abgelehnt (z. B. Gmail) → über die Hauptverbindung lesen
+            openRead.remove(acc.getString("id") + READ)
             dropKey(acc.getString("id") + READ)
-            readOn(acc, path, uid, "", ck, rules)
+            readOn(acc, path, uid, "", ck, rules, markSeen)
         }
     }
 
-    private fun readOn(acc: JSONObject, path: String, uid: Long, slot: String, ck: String, rules: JSONObject): JSONObject {
+    private fun readOn(acc: JSONObject, path: String, uid: Long, slot: String, ck: String, rules: JSONObject, markSeen: Boolean): JSONObject {
+        val keep = slot == READ
         return withAcc(acc, slot) { s ->
-            val f = s.getFolder(path) as IMAPFolder
-            f.open(Folder.READ_WRITE)
+            val f = readFolder(s, acc.getString("id") + slot, path, keep)
             try {
                 val m = f.getMessageByUID(uid) ?: throw UserError("Die E-Mail wurde auf dem Server nicht mehr gefunden.")
+                (m as IMAPMessage).peek = true
                 val p = Parsed()
                 walk(m, p)
-                try { m.setFlag(Flags.Flag.SEEN, true) } catch (_: Exception) {}
+                if (markSeen) try { m.setFlag(Flags.Flag.SEEN, true) } catch (_: Exception) {}
                 var html = p.html
                 if (html != null) {
                     for ((cid, part) in p.inline) {
@@ -429,7 +465,10 @@ class MailCore(private val store: Store) {
                     .put("score", sc.score).put("reasons", sc.reasons.toJson()).put("allowed", sc.allowed)
                     .put("unsubscribe", unsubUrl)
                     .also { r -> if ((html?.length ?: 0) < 1_500_000) synchronized(readCache) { readCache[ck] = r } }
-            } finally { try { f.close(false) } catch (_: Exception) {} }
+            } catch (e: Exception) {
+                if (keep) { openRead.remove(acc.getString("id") + slot); try { f.close(false) } catch (_: Exception) {} }
+                throw e
+            } finally { if (!keep) try { f.close(false) } catch (_: Exception) {} }
         }
     }
 

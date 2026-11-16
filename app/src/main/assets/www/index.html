@@ -792,26 +792,39 @@ function renderSide(){
 
 /* ================= Liste ================= */
 let loadSeq=0;
+/* Zuletzt geladene Listen merken: beim nächsten Öffnen sofort zeigen, frische Daten kommen im Hintergrund. */
+let LCACHE={};try{LCACHE=JSON.parse(localStorage.getItem('gp-lc')||'{}')}catch(e){}
+const PREVC=new Map();
+function saveLC(vk,items){LCACHE[vk]={t:Date.now(),items:items.slice(0,120)};const ks=Object.keys(LCACHE).sort((a,b)=>LCACHE[b].t-LCACHE[a].t);ks.slice(8).forEach(k=>delete LCACHE[k]);try{localStorage.setItem('gp-lc',JSON.stringify(LCACHE))}catch(e){}}
+let prefSeq=0;
+async function prefetchTop(seq){if(!window.MailBridge)return;const my=++prefSeq;
+  for(const m of ITEMS.slice(0,10)){if(seq!==loadSeq||my!==prefSeq)return;if(m.role==='junk')continue;try{await api('prefetch',{acc:m.acc,path:m.path,uid:m.uid})}catch(e){}}}
+function loadPreviews(seq,acc,path,items){if(VIEW!=='preview'||!path)return;const need=items.filter(m=>!m.preview).slice(0,40);if(!need.length)return;
+  api('previews',{acc,path,uids:need.map(m=>m.uid)}).then(p=>{const map=(p&&p.map)||{};need.forEach(m=>{const t=map[m.uid];if(t!=null){m.preview=t;PREVC.set(keyOf(m),t)}});if(seq===loadSeq)renderList();saveLC(JSON.stringify(V)+'|'+Q,ITEMS)}).catch(()=>{})}
 async function loadList(silent){
   if(V.type==='contacts'||V.type==='settings'||V.type==='outbox'){LOADING=false;renderList();return}
-  const seq=++loadSeq;
-  if(!silent){LOADING=true;ITEMS=[];NOTES=[];CHECK.clear();renderList()}
+  const seq=++loadSeq;const vk=JSON.stringify(V)+'|'+Q;const cached=!Q&&LCACHE[vk]?LCACHE[vk].items:null;
+  if(!silent){LOADING=true;ITEMS=cached?cached.map(m=>({...m})):[];NOTES=[];CHECK.clear();renderList()}
   const targets=V.type==='uni'?CFG.accounts.flatMap(a=>[{acc:a.id,role:V.role},...(V.role==='inbox'?inboxExtras(a.id).map(p=>({acc:a.id,path:p,extra:true})):[])]):[{acc:V.acc,path:V.path}];
   const fresh=[];const notes=[];let moved=0;
   await Promise.all(targets.map(async t=>{
     try{
-      const r=await api('list',{acc:t.acc,role:t.role,path:t.path,q:Q,limit:V.type==='uni'?40:80,preview:VIEW==='preview'});
+      const r=await api('list',{acc:t.acc,role:t.role,path:t.path,q:Q,limit:V.type==='uni'?40:80,preview:false});
       if(seq!==loadSeq)return;
       if(!r.path&&V.type==='uni'&&!t.extra)notes.push(`${accOf(t.acc).name}: kein ${ROLE_NAME[V.role]}-Ordner gefunden.`);
-      r.items.forEach(m=>{m.acc=t.acc;m.path=r.path;m.role=r.role;if(t.extra)m.ftag=(folderOf(t.acc,r.path)||{}).name;fresh.push(m)});
+      r.items.forEach(m=>{m.acc=t.acc;m.path=r.path;m.role=r.role;if(t.extra)m.ftag=(folderOf(t.acc,r.path)||{}).name;if(!m.preview&&PREVC.has(keyOf(m)))m.preview=PREVC.get(keyOf(m));fresh.push(m)});
       moved+=r.moved||0;
-      if(!silent){ITEMS=fresh.slice().sort((a,b)=>b.date-a.date);renderList()}
+      if(cached)cached.forEach(c=>{if(c.preview&&!PREVC.has(keyOf(c)))PREVC.set(keyOf(c),c.preview)});
+      loadPreviews(seq,t.acc,r.path,r.items);
+      if(!silent&&!cached){ITEMS=fresh.slice().sort((a,b)=>b.date-a.date);renderList()}
     }catch(e){notes.push(e.message.startsWith(accOf(t.acc).name)?e.message:`${accOf(t.acc).name}: ${e.message}`)}
   }));
   if(seq!==loadSeq)return;
   LOADING=false;NOTES=notes;
   const keep=new Set(fresh.map(keyOf));CHECK.forEach(k=>{if(!keep.has(k))CHECK.delete(k)});
   ITEMS=fresh.sort((a,b)=>b.date-a.date);
+  if(!Q)saveLC(vk,ITEMS);
+  setTimeout(()=>prefetchTop(seq),300);
   if(moved){toast(`${moved} E-Mail${moved===1?'':'s'} vom Spamfilter in den Spam-Ordner verschoben`);loadOverviews()}
   renderList();
 }

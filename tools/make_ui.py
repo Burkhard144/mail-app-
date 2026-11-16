@@ -45,7 +45,8 @@ async function start(){
 rep("  try{CFG=await api('config')}catch(e){return}\n", "  try{CFG=await api('config');CFG.__loaded=true}catch(e){return}\n  try{OUTBOX=(await api('outbox')).items||[];if(OUTBOX.length)obTick()}catch(e){}\n")
 
 # 4) Liste mit Textvorschau
-rep("q:Q,limit:V.type==='uni'?40:80});", "q:Q,limit:V.type==='uni'?40:80,preview:VIEW==='preview'});")
+# (Vorschautexte werden nach dem Anzeigen der Liste über 'previews' nachgeladen, siehe loadList)
+rep("q:Q,limit:V.type==='uni'?40:80});", "q:Q,limit:V.type==='uni'?40:80,preview:false});")
 
 # 5) KI über den eigenen Schlüssel
 rep("if(window.claude&&claude.use)claude.use('sample').then(s=>{AI=s}).catch(()=>{});",
