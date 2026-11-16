@@ -111,8 +111,10 @@ class MailCore(private val store: Store) {
         val m = (e.message ?: "") + " " + (e.cause?.message ?: "")
         return when {
             e is UserError -> e
-            e is javax.mail.AuthenticationFailedException || Regex("auth|login|credential|password|invalid", RegexOption.IGNORE_CASE).containsMatchIn(m) ->
-                UserError(name + "Anmeldung abgelehnt. Prüfe das App-Passwort und ob IMAP beim Anbieter freigeschaltet ist.")
+            Regex("simultaneous|too many|bandwidth|throttl|overquota|limit", RegexOption.IGNORE_CASE).containsMatchIn(m) ->
+                UserError(name + "Der Server lässt gerade keine weitere Verbindung zu. Bitte kurz warten und nochmal versuchen. (Server: ${m.trim().take(120)})")
+            e is javax.mail.AuthenticationFailedException || Regex("AUTHENTICATIONFAILED|authentication failed|invalid credentials|login failed|web login|application-specific|username and password", RegexOption.IGNORE_CASE).containsMatchIn(m) ->
+                UserError(name + "Anmeldung abgelehnt. Prüfe das App-Passwort und ob IMAP beim Anbieter freigeschaltet ist. (Server: ${m.trim().take(120)})")
             Regex("UnknownHost|ENOTFOUND|resolve", RegexOption.IGNORE_CASE).containsMatchIn(m) -> UserError(name + "Server nicht gefunden. Prüfe die Serveradresse oder deine Internetverbindung.")
             Regex("timed? ?out|timeout", RegexOption.IGNORE_CASE).containsMatchIn(m) -> UserError(name + "Der Mailserver antwortet nicht rechtzeitig. Bitte gleich nochmal versuchen.")
             else -> UserError(name + (e.message ?: "Unbekannter Fehler"))
@@ -356,7 +358,16 @@ class MailCore(private val store: Store) {
             return cached
         }
         val rules = store.load().getJSONObject("rules")
-        return withAcc(acc, READ) { s ->
+        return try { readOn(acc, path, uid, READ, ck, rules) } catch (e: UserError) {
+            if (e.message?.contains("nicht mehr gefunden") == true) throw e
+            // zweite Verbindung abgelehnt (z. B. Gmail) → über die Hauptverbindung lesen
+            dropKey(acc.getString("id") + READ)
+            readOn(acc, path, uid, "", ck, rules)
+        }
+    }
+
+    private fun readOn(acc: JSONObject, path: String, uid: Long, slot: String, ck: String, rules: JSONObject): JSONObject {
+        return withAcc(acc, slot) { s ->
             val f = s.getFolder(path) as IMAPFolder
             f.open(Folder.READ_WRITE)
             try {
@@ -413,7 +424,7 @@ class MailCore(private val store: Store) {
 
     /** Liefert einen Anhang als Bytes. */
     fun attachment(acc: JSONObject, path: String, uid: Long, index: Int): Triple<String, String, ByteArray> {
-        return withAcc(acc, READ) { s ->
+        return withAcc(acc) { s ->
             val f = s.getFolder(path) as IMAPFolder
             f.open(Folder.READ_ONLY)
             try {
