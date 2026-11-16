@@ -831,7 +831,9 @@ function loadPreviews(seq,acc,path,items){if(VIEW!=='preview'||!path)return;cons
   api('previews',{acc,path,uids:need.map(m=>m.uid)}).then(p=>{const map=(p&&p.map)||{};need.forEach(m=>{const t=map[m.uid];if(t!=null){m.preview=t;PREVC.set(keyOf(m),t)}});if(seq===loadSeq)renderList();saveLC(JSON.stringify(V)+'|'+Q,ITEMS)}).catch(()=>{})}
 async function loadList(silent){
   if(V.type==='contacts'||V.type==='settings'||V.type==='outbox'){LOADING=false;renderList();return}
-  const seq=++loadSeq;const vk=JSON.stringify(V)+'|'+Q;const cached=!Q&&LCACHE[vk]?LCACHE[vk].items:null;
+  const seq=++loadSeq;const vk=JSON.stringify(V)+'|'+Q;const t0=Date.now();const cached=!Q&&LCACHE[vk]?LCACHE[vk].items.filter(m=>!REMOVED_T.has(keyOf(m))):null;
+  /* Mails, die während des Ladens gelöscht/verschoben wurden, nicht wieder anzeigen */
+  const gone=m=>(REMOVED_T.get(keyOf(m))||0)>=t0-100;
   if(!silent){LOADING=true;ITEMS=cached?cached.map(m=>({...m})):[];NOTES=[];CHECK.clear();renderList()}
   const targets=V.type==='uni'?CFG.accounts.flatMap(a=>[{acc:a.id,role:V.role},...(V.role==='inbox'?inboxExtras(a.id).map(p=>({acc:a.id,path:p,extra:true})):[])]):[{acc:V.acc,path:V.path}];
   const fresh=[];const notes=[];let moved=0;
@@ -844,13 +846,13 @@ async function loadList(silent){
       moved+=r.moved||0;
       if(cached)cached.forEach(c=>{if(c.preview&&!PREVC.has(keyOf(c)))PREVC.set(keyOf(c),c.preview)});
       loadPreviews(seq,t.acc,r.path,r.items);
-      if(!silent&&!cached){ITEMS=fresh.slice().sort((a,b)=>b.date-a.date);renderList()}
+      if(!silent&&!cached){ITEMS=fresh.filter(m=>!gone(m)).sort((a,b)=>b.date-a.date);renderList()}
     }catch(e){notes.push(e.message.startsWith(accOf(t.acc).name)?e.message:`${accOf(t.acc).name}: ${e.message}`)}
   }));
   if(seq!==loadSeq)return;
   LOADING=false;NOTES=notes;
   const keep=new Set(fresh.map(keyOf));CHECK.forEach(k=>{if(!keep.has(k))CHECK.delete(k)});
-  ITEMS=fresh.sort((a,b)=>b.date-a.date);
+  ITEMS=fresh.filter(m=>!gone(m)).sort((a,b)=>b.date-a.date);
   if(!Q)saveLC(vk,ITEMS);
   setTimeout(()=>prefetchTop(seq),300);
   if(moved){toast(`${moved} E-Mail${moved===1?'':'s'} vom Spamfilter in den Spam-Ordner verschoben`);loadOverviews()}
@@ -973,8 +975,9 @@ function renderRead(){
 }
 
 /* ================= Aktionen ================= */
-const REMOVED=new Map();
-function removeItems(keys){const s=new Set(keys);ITEMS.forEach(m=>{if(s.has(keyOf(m)))REMOVED.set(keyOf(m),m)});ITEMS=ITEMS.filter(m=>!s.has(keyOf(m)));keys.forEach(k=>CHECK.delete(k));if(s.has(SEL)){SEL=null;CUR=null;setPane('list')}renderList();renderRead()}
+const REMOVED=new Map(),REMOVED_T=new Map();
+function removeItems(keys){const s=new Set(keys);const now=Date.now();keys.forEach(k=>REMOVED_T.set(k,now));ITEMS.forEach(m=>{if(s.has(keyOf(m)))REMOVED.set(keyOf(m),m)});
+  try{let ch=false;Object.values(LCACHE).forEach(c=>{const n=c.items.length;c.items=c.items.filter(m=>!s.has(keyOf(m)));if(c.items.length!==n)ch=true});if(ch)localStorage.setItem('gp-lc',JSON.stringify(LCACHE))}catch(_){}ITEMS=ITEMS.filter(m=>!s.has(keyOf(m)));keys.forEach(k=>CHECK.delete(k));if(s.has(SEL)){SEL=null;CUR=null;setPane('list')}renderList();renderRead()}
 async function bulk(op,keys,extra={}){
   const items=keys.map(k=>ITEMS.find(m=>keyOf(m)===k)||REMOVED.get(k)).filter(Boolean).map(m=>({acc:m.acc,path:m.path,uid:m.uid,fromAddr:m.fromAddr}));
   if(!items.length)return;

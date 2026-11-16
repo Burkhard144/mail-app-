@@ -60,9 +60,11 @@ class MailCore(private val store: Store) {
         return p
     }
 
-    fun connectNew(acc: JSONObject, pass: String): IMAPStore {
+    /** idle = true: Verbindung für die Hintergrund-Überwachung – darf lange still sein (IMAP IDLE). */
+    fun connectNew(acc: JSONObject, pass: String, idle: Boolean = false): IMAPStore {
         val p = imapProps(acc)
         val proto = p.getProperty("mail.store.protocol")
+        if (idle) p["mail.$proto.timeout"] = (10 * 60_000).toString()
         val s = Session.getInstance(p).getStore(proto) as IMAPStore
         try {
             s.connect(acc.optString("imapHost"), acc.optInt("imapPort", 993), user(acc), pass)

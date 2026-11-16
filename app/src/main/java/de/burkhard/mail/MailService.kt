@@ -52,7 +52,9 @@ class MailService : Service() {
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setContentIntent(PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE))
             .build()
-        if (Build.VERSION.SDK_INT >= 29) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) else startForeground(1, n)
+        // Android 15+ beendet "dataSync"-Dienste nach 6 Stunden – für Mail-Benachrichtigungen ist "remoteMessaging" der richtige Typ
+        if (Build.VERSION.SDK_INT >= 34) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING)
+        else if (Build.VERSION.SDK_INT >= 29) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) else startForeground(1, n)
         restartWatchers()
         return START_STICKY
     }
@@ -78,22 +80,27 @@ class MailService : Service() {
         var backoff = 5_000L
         while (running && !Thread.currentThread().isInterrupted) {
             try {
-                val st = app.core.connectNew(acc, app.store.password(acc.getString("id")))
+                val st = app.core.connectNew(acc, app.store.password(acc.getString("id")), idle = true)
+                val dog = java.util.Timer(true)
                 try {
                     val inbox = st.getFolder("INBOX") as IMAPFolder
                     inbox.open(Folder.READ_ONLY)
+                    // Mails, die während einer Verbindungspause gekommen sind, nachholen
+                    checkNew(this, acc, inbox)
                     inbox.addMessageCountListener(object : MessageCountAdapter() {
                         override fun messagesAdded(e: MessageCountEvent) {
-                            for (m in e.messages) try { onNewMail(acc, inbox, m) } catch (_: Exception) {}
+                            try { checkNew(this@MailService, acc, inbox) } catch (_: Exception) {}
                         }
                     })
                     backoff = 5_000L
-                    var since = System.currentTimeMillis()
-                    while (running && !Thread.currentThread().isInterrupted && st.isConnected) {
+                    // Alle 8 Minuten kurz anstupsen, damit Handynetz/Router die stille Verbindung nicht kappen
+                    dog.schedule(object : java.util.TimerTask() {
+                        override fun run() { try { inbox.messageCount } catch (_: Exception) {} }
+                    }, 8 * 60_000L, 8 * 60_000L)
+                    while (running && !Thread.currentThread().isInterrupted && inbox.isOpen) {
                         inbox.idle(true)
-                        if (System.currentTimeMillis() - since > 20 * 60_000) { inbox.messageCount; since = System.currentTimeMillis() }
                     }
-                } finally { try { st.close() } catch (_: Exception) {} }
+                } finally { dog.cancel(); try { st.close() } catch (_: Exception) {} }
             } catch (_: InterruptedException) { return } catch (_: Exception) {
                 try { Thread.sleep(backoff) } catch (_: InterruptedException) { return }
                 backoff = minOf(backoff * 2, 5 * 60_000L)
@@ -101,7 +108,47 @@ class MailService : Service() {
         }
     }
 
-    private fun onNewMail(acc: JSONObject, inbox: IMAPFolder, m: Message) {
+    override fun onDestroy() { running = false; threads.forEach { it.interrupt() }; super.onDestroy() }
+
+    object App { @Volatile var foreground = false }
+
+    companion object {
+        const val ACTION_NEW_MAIL = "de.burkhard.mail.NEW_MAIL"
+        private val newLock = Any()
+
+        /** Meldet alle Mails im Posteingang, die neuer sind als die zuletzt gemeldete (für Dienst und 15-Minuten-Prüfung). */
+        fun checkNew(ctx: Context, acc: JSONObject, inbox: IMAPFolder) {
+            val store = MailApp.app.store
+            val id = acc.getString("id")
+            synchronized(newLock) {
+                val seen = store.getJson("lastuid")
+                val last = seen.optLong(id, -1L)
+                val uv = inbox.uidValidity
+                if (last < 0 || seen.optLong(id + "_uv", -1L) != uv) {
+                    val next = try { inbox.uidNext } catch (_: Exception) { -1L }
+                    val top = if (next > 0) next - 1 else {
+                        val c = inbox.messageCount
+                        if (c > 0) inbox.getUID(inbox.getMessage(c)) else 0L
+                    }
+                    seen.put(id, top).put(id + "_uv", uv); store.putJson("lastuid", seen)
+                    return
+                }
+                val msgs = inbox.getMessagesByUID(last + 1, javax.mail.UIDFolder.LASTUID)
+                var max = last
+                val cutoff = System.currentTimeMillis() - 2 * 60 * 60_000L
+                for (m in msgs) {
+                    if (m == null) continue
+                    val uid = inbox.getUID(m)
+                    if (uid <= last) continue
+                    if (uid > max) max = uid
+                    val d = (m.receivedDate ?: m.sentDate)?.time ?: System.currentTimeMillis()
+                    if (d >= cutoff) try { onNewMail(ctx, acc, inbox, m) } catch (_: Exception) {}
+                }
+                if (max > last) { seen.put(id, max); store.putJson("lastuid", seen) }
+            }
+        }
+
+    private fun onNewMail(ctx: Context, acc: JSONObject, inbox: IMAPFolder, m: Message) {
         val app = MailApp.app
         val cfg = app.store.load()
         val rules = cfg.getJSONObject("rules")
@@ -117,9 +164,9 @@ class MailService : Service() {
         val n = JSONObject().put("acc", acc.getString("id")).put("path", "INBOX").put("uid", inbox.getUID(m))
             .put("from", fromName).put("fromAddr", fromAddr).put("subject", subject).put("text", text.take(600))
         if (!sc.blocked) {
-            val i = Intent(ACTION_NEW_MAIL).setPackage(packageName).putExtra("json", n.toString())
-            sendBroadcast(i)
-            if (!App.foreground) showNotification(this, n)
+            val i = Intent(ACTION_NEW_MAIL).setPackage(ctx.packageName).putExtra("json", n.toString())
+            ctx.sendBroadcast(i)
+            if (!App.foreground) showNotification(ctx, n)
         }
         // Abwesenheitsnotiz
         val away = s.optJSONObject("away")
@@ -163,13 +210,6 @@ class MailService : Service() {
             else -> ""
         }
     }
-
-    override fun onDestroy() { running = false; threads.forEach { it.interrupt() }; super.onDestroy() }
-
-    object App { @Volatile var foreground = false }
-
-    companion object {
-        const val ACTION_NEW_MAIL = "de.burkhard.mail.NEW_MAIL"
         private val CODE_RX = Regex("(?:code|Code|CODE|Bestätigungscode|Sicherheitscode|PIN|TAN|verification|Verifizierung)[^0-9]{0,40}(\\d{3}[\\s-]?\\d{3}|\\d{4,8})")
         private val SIX = Regex("\\b(\\d{6})\\b")
 
@@ -196,12 +236,11 @@ class MailService : Service() {
             val s = MailApp.app.store.load().getJSONObject("settings").optJSONObject("notify") ?: JSONObject()
             val code = if (s.optBoolean("code", true)) findCode(n.optString("subject") + " " + n.optString("text")) else null
             val nid = (n.optLong("uid") % 100000).toInt() + 100
-            if (!forceSystem && s.optBoolean("popup", true) && Settings.canDrawOverlays(ctx)) {
-                Handler(Looper.getMainLooper()).post { Overlay.show(ctx, n, code, s.optBoolean("preview", true)) }
-                return
-            }
+            // Fenster über anderen Apps (falls erlaubt) – zusätzlich bleibt immer eine Benachrichtigung in der Leiste
+            val overlay = !forceSystem && s.optBoolean("popup", true) && Settings.canDrawOverlays(ctx)
+            if (overlay) Handler(Looper.getMainLooper()).post { try { Overlay.show(ctx, n, code, s.optBoolean("preview", true)) } catch (_: Exception) {} }
             val open = Intent(ctx, MainActivity::class.java).putExtra("openMail", n.toString()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            val b = NotificationCompat.Builder(ctx, MailApp.CH_MAIL)
+            val b = NotificationCompat.Builder(ctx, if (overlay) MailApp.CH_MAIL_QUIET else MailApp.CH_MAIL)
                 .setSmallIcon(R.drawable.ic_stat_mail).setColor(0xFF2F86E6.toInt())
                 .setContentTitle(n.optString("from")).setContentText(n.optString("subject"))
                 .setStyle(NotificationCompat.BigTextStyle().bigText(n.optString("subject") + (if (s.optBoolean("preview", true)) "\n" + n.optString("text").take(300) else "")))

@@ -12,8 +12,12 @@ import android.os.Build
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -35,11 +39,18 @@ class MailApp : Application() {
         store = Store(this)
         core = MailCore(store)
         createChannels(this)
+        // Sicherheitsnetz: alle 15 Minuten nach neuen Mails sehen, falls Android den Hintergrunddienst beendet hat
+        try {
+            WorkManager.getInstance(this).enqueueUniquePeriodicWork("mailcheck", ExistingPeriodicWorkPolicy.KEEP,
+                PeriodicWorkRequestBuilder<CheckWorker>(15, TimeUnit.MINUTES)
+                    .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build())
+        } catch (_: Exception) {}
     }
 
     companion object {
         lateinit var app: MailApp
         const val CH_MAIL = "neue_mails"
+        const val CH_MAIL_QUIET = "neue_mails_fenster"
         const val CH_SERVICE = "verbindung"
         const val CH_INFO = "hinweise"
 
@@ -49,12 +60,35 @@ class MailApp : Application() {
             nm.createNotificationChannel(NotificationChannel(CH_MAIL, "Neue E-Mails", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "Meldung bei neuen E-Mails"
             })
+            nm.createNotificationChannel(NotificationChannel(CH_MAIL_QUIET, "Neue E-Mails (mit Fenster)", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Ton und Eintrag in der Leiste, wenn zusätzlich das Fenster über anderen Apps erscheint"
+            })
             nm.createNotificationChannel(NotificationChannel(CH_SERVICE, "Verbindung zu den Konten", NotificationManager.IMPORTANCE_MIN).apply {
                 description = "Dauerhaftes Symbol, solange Mail auf neue E-Mails wartet"
                 setShowBadge(false)
             })
             nm.createNotificationChannel(NotificationChannel(CH_INFO, "Hinweise", NotificationManager.IMPORTANCE_DEFAULT))
         }
+    }
+}
+
+/** Prüft alle 15 Minuten die Posteingänge und meldet Mails, die der Hintergrunddienst verpasst hat. */
+class CheckWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
+    override suspend fun doWork(): Result {
+        val app = MailApp.app
+        if (app.store.load().getJSONObject("settings").optJSONObject("notify")?.optBoolean("instant", true) == false) return Result.success()
+        for (acc in app.store.accounts()) {
+            try {
+                val st = app.core.connectNew(acc, app.store.password(acc.getString("id")))
+                try {
+                    val inbox = st.getFolder("INBOX") as com.sun.mail.imap.IMAPFolder
+                    inbox.open(javax.mail.Folder.READ_ONLY)
+                    try { MailService.checkNew(applicationContext, acc, inbox) } finally { try { inbox.close(false) } catch (_: Exception) {} }
+                } finally { try { st.close() } catch (_: Exception) {} }
+            } catch (_: Exception) {}
+        }
+        try { MailService.start(applicationContext) } catch (_: Exception) {}
+        return Result.success()
     }
 }
 
