@@ -145,7 +145,7 @@ class Bridge(private val act: MainActivity) {
             "draft" -> { core.send(b, true); return ok().put("saved", true) }
             "queue" -> return SendWorker.queue(act, b.getJSONObject("payload"), b.optLong("delay", 0))
             "recall" -> return JSONObject().put("payload", SendWorker.recall(act, b.getString("id")))
-            "sendNow" -> { SendWorker.sendNow(act, b.getString("id")); return ok() }
+            "sendNow" -> { val sent = SendWorker.sendNow(act, b.getString("id")); return ok().put("already", !sent) }
             "outbox" -> return JSONObject().put("items", SendWorker.list())
             "attachment" -> { openAttachment(b); return ok() }
             "ai" -> return JSONObject().put("text", AiClient.ask(store.aiKey(), b.getString("prompt"), b.optString("tier", "default")))

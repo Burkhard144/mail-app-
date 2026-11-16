@@ -1153,10 +1153,11 @@ function toggleTheme(){setTheme(isDark()?'light':'dark')}
 applyTheme();
 
 /* ---- Meldung mit Knopf ---- */
-let tta;function toastAct(text,label,fn,ms=6500){clearTimeout(tta);document.querySelectorAll('.toast').forEach(x=>x.remove());
+let tta;function toastAct(text,label,fn,ms=6500,label2,fn2){clearTimeout(tta);document.querySelectorAll('.toast').forEach(x=>x.remove());
   const e=document.createElement('div');e.className='toast act';e.setAttribute('role','status');
-  e.innerHTML=`<span>${esc(text)}</span><button class="btn sm">${esc(label)}</button>`;
-  e.querySelector('button').onclick=()=>{e.remove();fn()};document.body.appendChild(e);tta=setTimeout(()=>e.remove(),ms)}
+  e.innerHTML=`<span>${esc(text)}</span><button class="btn sm" data-b="1">${esc(label)}</button>${label2?`<button class="btn sm primary" data-b="2">${esc(label2)}</button>`:''}`;
+  e.querySelector('[data-b="1"]').onclick=()=>{e.remove();fn()};if(label2)e.querySelector('[data-b="2"]').onclick=()=>{e.remove();fn2()};
+  document.body.appendChild(e);tta=setTimeout(()=>e.remove(),ms)}
 
 /* ---- Glas-Auswahllisten statt der dunklen Android-Liste ---- */
 /* Auge-Schalter in jedem Passwortfeld: Passwort zeigen / wieder verbergen */
@@ -1569,10 +1570,10 @@ function compose(pre={}){
 }
 const fmtDelay=s=>s>=60?`${Math.round(s/60)} Minute${s>=120?'n':''}`:`${s} Sekunden`;
 async function queueSend(payload,delay,pre){try{const r=await api('queue',{payload,delay});OUTBOX.push({id:r.id,payload,pre,sendAt:r.sendAt});renderSide();
-  toastAct(`Wird in ${fmtDelay(delay)} gesendet`,'Zurückholen',()=>recall(r.id),8000);obTick()}catch(e){toast(e.message)}}
+  toastAct(`Wird in ${fmtDelay(delay)} gesendet`,'Zurückholen',()=>recall(r.id),10000,'Jetzt senden',()=>sendNow(r.id));obTick()}catch(e){toast(e.message)}}
 async function recall(id){const o=OUTBOX.find(x=>x.id===id)||{};OUTBOX=OUTBOX.filter(x=>x.id!==id);renderSide();if(V.type==='outbox')renderList();
   try{const r=await api('recall',{id});const p=r.payload;compose({...(o.pre||{}),title:'Zurückgeholt',acc:p.acc,to:p.to,cc:p.cc,bcc:p.bcc,subject:p.subject});const ed=$('c-body');if(ed)ed.innerHTML=p.html;toast('Mail zurückgeholt. Du kannst sie jetzt ändern.')}catch(e){toast(e.message)}}
-async function sendNow(id){OUTBOX=OUTBOX.filter(x=>x.id!==id);renderSide();if(V.type==='outbox')renderList();try{await api('sendNow',{id});toast('Gesendet');loadOverviews()}catch(e){toast(e.message)}}
+async function sendNow(id){OUTBOX=OUTBOX.filter(x=>x.id!==id);renderSide();if(V.type==='outbox')renderList();toast('Wird gesendet …');try{const r=await api('sendNow',{id});toast(r&&r.already?'Ist schon unterwegs':'Gesendet ✓');loadOverviews()}catch(e){toast(e.message)}}
 let obTimer=null;
 function obTick(){clearTimeout(obTimer);if(!OUTBOX.length){if(V.type==='outbox')renderList();return}
   const now=Date.now();if(OUTBOX.some(o=>o.sendAt<=now)){OUTBOX=OUTBOX.filter(o=>o.sendAt>now);renderSide();if(V.type==='outbox')renderList();setTimeout(loadOverviews,5000)}

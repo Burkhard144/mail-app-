@@ -182,12 +182,26 @@ class SendWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, 
             return item.getJSONObject("payload")
         }
 
-        fun sendNow(ctx: Context, id: String) {
-            val box = MailApp.app.store.getJson("outbox")
-            val item = box.optJSONObject(id) ?: throw UserError("Diese Mail ist schon unterwegs.")
+        /** Sofort senden. Gibt false zurück, wenn die Mail schon unterwegs/verschickt ist. */
+        fun sendNow(ctx: Context, id: String): Boolean {
+            val app = MailApp.app
+            val item = synchronized(this) {
+                val box = app.store.getJson("outbox")
+                val it = box.optJSONObject(id) ?: return false
+                // aus dem Postausgang nehmen, bevor gesendet wird – so kann der Hintergrund-Versand sie nicht doppelt schicken
+                box.remove(id); app.store.putJson("outbox", box); it
+            }
             WorkManager.getInstance(ctx).cancelUniqueWork(id)
-            MailApp.app.core.send(item.getJSONObject("payload"), false)
-            box.remove(id); MailApp.app.store.putJson("outbox", box)
+            try {
+                app.core.send(item.getJSONObject("payload"), false)
+            } catch (e: Exception) {
+                // nicht verlieren: zurück in den Postausgang und gleich noch einmal versuchen lassen
+                synchronized(this) { val b = app.store.getJson("outbox"); b.put(id, item.put("sendAt", System.currentTimeMillis())); app.store.putJson("outbox", b) }
+                val req = OneTimeWorkRequestBuilder<SendWorker>().setInputData(workDataOf("id" to id)).build()
+                WorkManager.getInstance(ctx).enqueueUniqueWork(id, ExistingWorkPolicy.REPLACE, req)
+                throw e
+            }
+            return true
         }
 
         fun list(): JSONArray {
