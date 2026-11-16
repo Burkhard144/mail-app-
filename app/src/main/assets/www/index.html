@@ -885,7 +885,7 @@ function renderRead(){
   if(CUR.error){el.innerHTML=head+`<div class="note err">${esc(CUR.error)}</div>`;return}
   const thr=CFG.settings.spamThreshold||4;const P=protLevel();
   const hasRemote=d.html&&/<img[^>]+src=["']?https?:/i.test(d.html);
-  const remote=role!=='junk'&&(P===0||LOADREMOTE);
+  const remote=role!=='junk'&&((S_().images||'always')==='always'||LOADREMOTE);
   let html=d.html,cleaned=0;
   if(html&&P>=3&&role!=='junk'){const c=cleanLinks(html);html=c.html;cleaned=c.removed}
   const warns=html&&P>=2&&role!=='junk'?linkWarnings(html):[];
@@ -1566,9 +1566,10 @@ function renderSettings(){
      <div class="sgroup"><span class="fl">Mails in der Liste</span>${segH('s-view',[['compact','Absender und Betreff'],['preview','Mit Textvorschau']],VIEW)}</div>
      <div class="sgroup"><span class="fl">Größe der Einträge</span>${segH('s-big',[['0','Normal'],['1','Groß']],BIG?'1':'0')}</div>
      <div class="sgroup"><span class="fl">Absender-Logos</span>${segH('s-logos',[['1','Logos anzeigen'],['0','Nur Anfangsbuchstaben']],LOGOS?'1':'0')}<p class="hint">Die Logos holt Mail über den Bilderdienst von Google, nur anhand der Firmenadresse (z. B. amazon.de). Deine eigene Adresse und der Inhalt der Mails werden dabei nie übertragen. Bei privaten Adressen (Gmail, GMX, WEB.DE …) erscheinen immer die Anfangsbuchstaben.</p></div>
+     <div class="sgroup"><span class="fl">Bilder in Mails</span>${segH('s-img',[['always','Immer laden'],['ask','Erst nach Tippen']],S_().images||'always')}<p class="hint">„Erst nach Tippen“: Der Absender kann dann nicht sehen, wann du seine Mail öffnest. In der Mail erscheint ein Knopf „Bilder laden“. Im Spam-Ordner lädt Mail Bilder nie von selbst.</p></div>
      <div class="sgroup"><span class="fl">Start der App</span><p class="hint" style="margin:0">Mail öffnet immer mit „Alle Posteingänge“.</p></div>`}
   if(sec==='protect'){const L=protLevel();const feats=[
-      ['Externe Bilder blockieren, bis du sie freigibst',1],['Spamverdacht mit Begründung anzeigen',2],['Warnung bei Links, deren Ziel nicht zum Text passt',2],['Warnung vor gefährlichen Anhängen (.exe, .apk, Makro-Dateien)',2],
+      ['Spamverdacht mit Begründung anzeigen',2],['Warnung bei Links, deren Ziel nicht zum Text passt',2],['Warnung vor gefährlichen Anhängen (.exe, .apk, Makro-Dateien)',2],
       ['Tracking-Parameter aus Links entfernen (utm, fbclid …)',3],['Vor jedem Link das echte Ziel zeigen',3]];
     h=`<div class="prot"><div class="prot-ic">${ic('shield')}</div><h3>${['Kein Schutz','Basis-Schutz','Standard-Schutz','Erweiterter Schutz'][L]}</h3>
       <ul>${feats.map(([t,l])=>`<li class="${L>=l?'on':''}">${ic(L>=l?'tick':'x')}${t}</li>`).join('')}</ul>
@@ -1626,6 +1627,7 @@ function renderSettings(){
   // Handler
   onSeg('s-theme',v=>{setTheme(v);renderSettingsList()});
   onSeg('s-view',v=>{VIEW=v;try{localStorage.setItem('gp-view',v)}catch(_){}renderSettingsList()});
+  onSeg('s-img',v=>setAndRefresh({images:v},v==='always'?'Bilder werden immer geladen':'Bilder erst nach Tippen'));
   onSeg('s-big',v=>{BIG=v==='1';try{localStorage.setItem('gp-big',v)}catch(_){}});
   onSeg('s-logos',v=>{LOGOS=v==='1';try{localStorage.setItem('gp-logos',v)}catch(_){}});
   onSeg('s-prot',v=>setAndRefresh({protect:v},'Schutzstufe gespeichert').then(()=>{renderRead();if(CUR)renderRead()}));
