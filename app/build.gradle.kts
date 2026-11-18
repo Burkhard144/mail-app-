@@ -45,6 +45,8 @@ android {
     kotlinOptions { jvmTarget = "17" }
 
     packaging {
+        // Bibliotheken gepackt speichern – APK zum Herunterladen deutlich kleiner
+        jniLibs { useLegacyPackaging = true }
         resources {
             excludes += setOf(
                 "META-INF/NOTICE.md", "META-INF/LICENSE.md", "META-INF/NOTICE.txt", "META-INF/LICENSE.txt",
