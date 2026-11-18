@@ -157,6 +157,7 @@ class Bridge(private val act: MainActivity) {
                 MailService.showNotification(act, n, forceSystem = true)
                 return n
             }
+            "translate" -> return translate(b.getJSONArray("texts"))
             "diag" -> {
                 val pm = act.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
                 val d = store.getJson("diag")
@@ -229,6 +230,27 @@ class Bridge(private val act: MainActivity) {
             }
             else -> throw UserError("Unbekannte Aktion.")
         }
+    }
+
+    /** Englisch → Deutsch mit der Google-Übersetzung direkt auf dem Handy (ML Kit). */
+    private fun translate(texts: JSONArray): JSONObject {
+        val opts = com.google.mlkit.nl.translate.TranslatorOptions.Builder()
+            .setSourceLanguage(com.google.mlkit.nl.translate.TranslateLanguage.ENGLISH)
+            .setTargetLanguage(com.google.mlkit.nl.translate.TranslateLanguage.GERMAN).build()
+        val tr = com.google.mlkit.nl.translate.Translation.getClient(opts)
+        try {
+            try {
+                com.google.android.gms.tasks.Tasks.await(tr.downloadModelIfNeeded(com.google.mlkit.common.model.DownloadConditions.Builder().build()), 240, java.util.concurrent.TimeUnit.SECONDS)
+            } catch (e: Exception) {
+                throw UserError("Das Sprachpaket Englisch–Deutsch konnte nicht geladen werden. Beim ersten Mal braucht das Handy dafür Internet (ca. 30 MB).")
+            }
+            val out = JSONArray()
+            for (i in 0 until texts.length()) {
+                val t = texts.optString(i)
+                out.put(if (t.isBlank()) t else try { com.google.android.gms.tasks.Tasks.await(tr.translate(t), 60, java.util.concurrent.TimeUnit.SECONDS) } catch (_: Exception) { t })
+            }
+            return ok().put("texts", out)
+        } finally { try { tr.close() } catch (_: Exception) {} }
     }
 
     /** Verschlüsselte Sicherung in den Download-Ordner schreiben (Kopie für „Zusätzlich ablegen“ im App-Speicher). */

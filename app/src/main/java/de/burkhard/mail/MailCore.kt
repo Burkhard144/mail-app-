@@ -428,11 +428,14 @@ class MailCore(private val store: Store) {
         return withAcc(acc, slot) { s ->
             val f = readFolder(s, acc.getString("id") + slot, path, keep)
             try {
-                val m = f.getMessageByUID(uid) ?: throw UserError("Die E-Mail wurde auf dem Server nicht mehr gefunden.")
-                (m as IMAPMessage).peek = true
+                val im = f.getMessageByUID(uid) ?: throw UserError("Die E-Mail wurde auf dem Server nicht mehr gefunden.")
+                (im as IMAPMessage).peek = true
+                // Mail bis 5 MB in EINEM Rutsch holen und auf dem Handy zerlegen – statt jedes Teil (Text, HTML, Bilder) einzeln vom Server
+                val fpS = FetchProfile(); fpS.add(FetchProfile.Item.SIZE); fpS.add(FetchProfile.Item.ENVELOPE); f.fetch(arrayOf<Message>(im), fpS)
+                val m: Message = if (im.size in 0..5_000_000) try { MimeMessage(im) } catch (_: Exception) { im } else im
                 val p = Parsed()
                 walk(m, p)
-                if (markSeen) try { m.setFlag(Flags.Flag.SEEN, true) } catch (_: Exception) {}
+                if (markSeen) try { im.setFlag(Flags.Flag.SEEN, true) } catch (_: Exception) {}
                 var html = p.html
                 if (html != null) {
                     for ((cid, part) in p.inline) {
@@ -467,7 +470,7 @@ class MailCore(private val store: Store) {
                     .put("replyTo", rt ?: "")
                     .put("to", (m.getRecipients(Message.RecipientType.TO) ?: emptyArray()).joinToString(", ") { it.toString() })
                     .put("cc", (m.getRecipients(Message.RecipientType.CC) ?: emptyArray()).joinToString(", ") { it.toString() })
-                    .put("date", (m.sentDate ?: m.receivedDate ?: Date()).time)
+                    .put("date", (m.sentDate ?: im.receivedDate ?: Date()).time)
                     .put("messageId", (m as MimeMessage).messageID ?: "")
                     .put("references", JSONArray((m.getHeader("References") ?: emptyArray()).flatMap { it.split(Regex("\\s+")) }.filter { it.isNotBlank() }))
                     .put("html", html ?: JSONObject.NULL)

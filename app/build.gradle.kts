@@ -63,4 +63,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("com.sun.mail:android-mail:1.6.7")
     implementation("com.sun.mail:android-activation:1.6.7")
+    // Übersetzen direkt auf dem Handy (kostenlos, Sprachpaket wird einmalig geladen)
+    implementation("com.google.mlkit:translate:17.0.3")
+    implementation("com.google.android.gms:play-services-tasks:18.1.0")
 }

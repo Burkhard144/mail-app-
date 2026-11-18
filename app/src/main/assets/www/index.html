@@ -1,7 +1,7 @@
 <!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body><title>Mail</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
 <style>
 /* Layout: drei schwebende Glasscheiben (Ordner · Liste · Lesen) über einem ruhigen Meeresverlauf; am Handy eine Scheibe nach der anderen */
 :root{
@@ -129,6 +129,9 @@ a{color:var(--accent)}
 .spambox{margin-top:14px;padding:10px 12px;border-radius:14px;background:var(--warn-bg);font-size:13px;line-height:1.5}
 .spambox b{color:var(--accent2)}
 .spambox ul{margin:4px 0 0;padding-left:18px}
+.trbar{margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 12px;border-radius:14px;background:var(--sel);font-size:14px}
+.trbar svg{width:20px;height:20px;flex:none;color:var(--accent)}
+.trbar span{flex:1;min-width:140px}
 .imgnote{margin-top:12px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--muted)}
 .text{max-width:72ch;line-height:1.65;padding-top:16px;white-space:pre-wrap;overflow-wrap:anywhere}
 .htmlframe{width:100%;border:0;border-radius:14px;margin-top:14px;background:#fff;min-height:120px;display:block}
@@ -277,7 +280,7 @@ details.adv summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--mu
 #mails .mail.active{box-shadow:inset 0 1px 0 var(--hi),0 0 0 2px rgba(47,134,230,.28),var(--card-sh)}
 #mails .mail.unread{box-shadow:inset 0 1px 0 var(--hi),inset 0 -2.5px 0 rgba(47,134,230,.55),0 8px 16px -12px rgba(47,134,230,.35),var(--card-sh)}
 #mails .mail.unread.active{box-shadow:inset 0 1px 0 var(--hi),inset 0 -2.5px 0 rgba(47,134,230,.55),0 0 0 2px rgba(47,134,230,.28),var(--card-sh)}
-#mails .mrow{margin-bottom:0}
+#mails .mrow{margin-bottom:0;content-visibility:auto;contain-intrinsic-size:auto 128px}
 .biglist .mail .from{font-size:18px}
 .biglist .mail .date{font-size:14px}
 .biglist .mail .subj{font-size:16.5px}
@@ -616,6 +619,7 @@ const ICON={
   junk:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 9l6 6M15 9l-6 6"/>',
   shield:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5"/>',
   archive:'<path d="M3 5h18v4H3zM5 9v10h14V9M10 13h4"/>',
+  lang:'<path d="M4 5h8M8 3v2M5.5 5c.8 3 3 5.5 6 7M10.5 5c-.8 3-3 5.5-6.5 7"/><path d="M13 21l4-10 4 10M14.5 17.5h5"/>',
   download:'<path d="M12 3v12M7 10l5 5 5-5M4 20h16"/>',
   upload:'<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>',
   share:'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>',
@@ -839,10 +843,13 @@ let LCACHE={};try{LCACHE=JSON.parse(localStorage.getItem('gp-lc')||'{}')}catch(e
 const PREVC=new Map();
 function saveLC(vk,items){LCACHE[vk]={t:Date.now(),items:items.slice(0,120)};const ks=Object.keys(LCACHE).sort((a,b)=>LCACHE[b].t-LCACHE[a].t);ks.slice(8).forEach(k=>delete LCACHE[k]);try{localStorage.setItem('gp-lc',JSON.stringify(LCACHE))}catch(e){}}
 let prefSeq=0;
+let rlT=null;function renderListSoon(){clearTimeout(rlT);rlT=setTimeout(()=>{rlT=null;renderList()},150)}
 async function prefetchTop(seq){if(!window.MailBridge)return;const my=++prefSeq;
-  for(const m of ITEMS.slice(0,10)){if(seq!==loadSeq||my!==prefSeq)return;if(m.role==='junk')continue;try{await api('prefetch',{acc:m.acc,path:m.path,uid:m.uid})}catch(e){}}}
+  /* zuerst die ungelesenen, dann die neuesten – die werden am ehesten geöffnet */
+  const top=ITEMS.slice(0,25);const pick=[...top.filter(m=>!m.seen),...top.filter(m=>m.seen)].slice(0,15);
+  for(const m of pick){if(seq!==loadSeq||my!==prefSeq)return;if(m.role==='junk')continue;try{await api('prefetch',{acc:m.acc,path:m.path,uid:m.uid})}catch(e){}}}
 function loadPreviews(seq,acc,path,items){if(VIEW!=='preview'||!path)return;const need=items.filter(m=>!m.preview).slice(0,40);if(!need.length)return;
-  api('previews',{acc,path,uids:need.map(m=>m.uid)}).then(p=>{const map=(p&&p.map)||{};need.forEach(m=>{const t=map[m.uid];if(t!=null){m.preview=t;PREVC.set(keyOf(m),t)}});if(seq===loadSeq)renderList();saveLC(JSON.stringify(V)+'|'+Q,ITEMS)}).catch(()=>{})}
+  api('previews',{acc,path,uids:need.map(m=>m.uid)}).then(p=>{const map=(p&&p.map)||{};need.forEach(m=>{const t=map[m.uid];if(t!=null){m.preview=t;PREVC.set(keyOf(m),t)}});if(seq===loadSeq)renderListSoon();saveLC(JSON.stringify(V)+'|'+Q,ITEMS)}).catch(()=>{})}
 async function loadList(silent){
   if(V.type==='contacts'||V.type==='settings'||V.type==='outbox'){LOADING=false;renderList();return}
   const seq=++loadSeq;const vk=JSON.stringify(V)+'|'+Q;const t0=Date.now();const cached=!Q&&LCACHE[vk]?LCACHE[vk].items.filter(m=>!REMOVED_T.has(keyOf(m))):null;
@@ -860,7 +867,7 @@ async function loadList(silent){
       moved+=r.moved||0;
       if(cached)cached.forEach(c=>{if(c.preview&&!PREVC.has(keyOf(c)))PREVC.set(keyOf(c),c.preview)});
       loadPreviews(seq,t.acc,r.path,r.items);
-      if(!silent&&!cached){ITEMS=fresh.filter(m=>!gone(m)).sort((a,b)=>b.date-a.date);renderList()}
+      if(!silent&&!cached){ITEMS=fresh.filter(m=>!gone(m)).sort((a,b)=>b.date-a.date);renderListSoon()}
     }catch(e){notes.push(e.message.startsWith(accOf(t.acc).name)?e.message:`${accOf(t.acc).name}: ${e.message}`)}
   }));
   if(seq!==loadSeq)return;
@@ -972,6 +979,7 @@ function renderRead(){
       ${d.unsubscribe&&role!=='junk'?`<div class="unsub">${ic('unsub')}<span>Newsletter von ${esc(d.from)}</span><button class="btn sm" data-act="unsub">Abbestellen</button></div>`:''}
       ${hasRemote&&!remote&&role!=='junk'?`<div class="imgnote">Externe Bilder sind blockiert, damit der Absender nicht sieht, wann du liest. <button class="btn" data-act="loadimg">Bilder laden</button></div>`:''}
       ${cleaned?`<div class="imgnote">${ic('shield')} ${cleaned} Tracking-Angabe${cleaned===1?'':'n'} aus Links entfernt.</div>`:''}
+      ${looksEnglish(d.text)?`<div class="trbar" id="trbar">${ic('lang')}<span>Diese Mail ist auf Englisch.</span><button class="btn sm primary" data-act="translate">Auf Deutsch übersetzen</button></div>`:''}
       ${d.attachments&&d.attachments.length?`<div class="atts">${d.attachments.map(t=>{const bad=P>=2&&DANGER_RX.test(t.filename);return `<button class="chip ${bad?'bad':''}" data-act="att" data-i="${t.i}">${ic(bad?'block':/\.pdf$/i.test(t.filename)?'file':'clip')}${esc(t.filename)} · ${fmtSize(t.size)}${bad?' · gefährlich':''}</button>`}).join('')}</div>`:''}
       ${html?`<iframe class="htmlframe" id="hf" title="Inhalt der E-Mail" sandbox="allow-same-origin${role==='junk'?'':' allow-popups allow-popups-to-escape-sandbox'}"></iframe>`:`<div class="text">${esc(d.text||'')}</div>`}
     </div>`;
@@ -983,7 +991,7 @@ function renderRead(){
         let h0=Math.max(de.scrollHeight,doc.body.scrollHeight,doc.body.offsetHeight);
         doc.body.querySelectorAll('*').forEach(el=>{const b=el.getBoundingClientRect().bottom;if(b>h0)h0=b});
         if(z<1)de.style.zoom=String(z);f.style.height=Math.ceil(h0*z+16)+'px'};
-      fit();[150,600,1500,3000,6000,10000].forEach(t=>setTimeout(fit,t));doc.querySelectorAll('img').forEach(i=>i.addEventListener('load',fit));
+      f.__fit=fit;fit();[150,600,1500,3000,6000,10000].forEach(t=>setTimeout(fit,t));doc.querySelectorAll('img').forEach(i=>i.addEventListener('load',fit));
       let rw=f.clientWidth;new ResizeObserver(()=>{if(Math.abs(f.clientWidth-rw)>4){rw=f.clientWidth;fit()}}).observe(f);
       doc.addEventListener('click',ev=>{const an=ev.target.closest&&ev.target.closest('a[href]');if(!an)return;ev.preventDefault();openLink(an.getAttribute('href'),an.textContent)})}catch(e){f.style.height='70vh'}});}
 }
@@ -1617,6 +1625,32 @@ function copyCode(btn){const code=btn.dataset.code;try{MailBridge.copy(code)}cat
 function selectCode(){const el=$('n-codev');if(!el)return;const r=document.createRange();r.selectNodeContents(el);const s=getSelection();s.removeAllRanges();s.addRange(r);toast('Code markiert – jetzt über das Menü kopieren')}
 async function demoIncoming(){try{const n=await api('inject');loadOverviews();if(V.type==='uni'||V.type==='box')loadList(true);notifyPopup(n)}catch(e){}}
 
+/* ---- Übersetzen englischer Mails (in der App: Google-Übersetzung direkt auf dem Handy, kostenlos) ---- */
+function looksEnglish(t){const w=String(t||'').toLowerCase().match(/[a-zäöüß']+/g)||[];if(w.length<6)return false;
+  const en=new Set('the and you your to of for is are this that with have has will please our we be on at from not can it by an or was were hello thank thanks dear regards'.split(' '));
+  const de=new Set('der die das und sie ihr ist nicht mit für wir ein eine zu den von auf im bitte ich sehr hallo danke grüße'.split(' '));
+  let e=0,d=0;w.slice(0,500).forEach(x=>{if(en.has(x))e++;if(de.has(x))d++});return e>=3&&e>d*2}
+let TRSTATE=null; // {k, nodes:[{n,orig,tr}], on}
+function trNodes(){const f=$('hf');const out=[];
+  if(f&&f.contentDocument&&f.contentDocument.body){const doc=f.contentDocument;const w=doc.createTreeWalker(doc.body,NodeFilter.SHOW_TEXT);let n;
+    while((n=w.nextNode())){const p=n.parentNode&&n.parentNode.nodeName;if(/^(SCRIPT|STYLE|TITLE)$/.test(p))continue;if(/[A-Za-z]{2}/.test(n.nodeValue))out.push(n)}}
+  else{const el=document.querySelector('.read-body .text');if(el&&el.firstChild)out.push(el.firstChild)}
+  const sj=document.querySelector('.read-subj');if(sj&&sj.firstChild&&/[A-Za-z]{2}/.test(sj.textContent))out.unshift(sj.firstChild);
+  return out}
+async function translateMail(){const bar=$('trbar');if(!bar)return;
+  if(TRSTATE&&TRSTATE.k===SEL&&TRSTATE.nodes[0]&&TRSTATE.nodes[0].n.isConnected){TRSTATE.on=true;TRSTATE.nodes.forEach(x=>x.n.nodeValue=x.tr);trBar();return}
+  bar.innerHTML=`${ic('lang')}<span>Wird übersetzt …${window.MailBridge?'<br><small style="color:var(--muted)">Beim allerersten Mal lädt das Handy einmalig das Sprachpaket Englisch–Deutsch (ca. 30 MB).</small>':''}</span>`;
+  const nodes=trNodes();if(!nodes.length){trBar('Kein Text zum Übersetzen gefunden.');return}
+  try{const texts=nodes.map(n=>n.nodeValue);const r=await api('translate',{texts,from:'en',to:'de'});const tr=r.texts||[];
+    TRSTATE={k:SEL,on:true,nodes:nodes.map((n,i)=>({n,orig:texts[i],tr:tr[i]!=null?(/^\s/.test(texts[i])?' ':'')+String(tr[i]).trim()+(/\s$/.test(texts[i])?' ':''):texts[i]}))};
+    TRSTATE.nodes.forEach(x=>x.n.nodeValue=x.tr);trBar()}
+  catch(e){trBar(e.message)}}
+function trToggle(){if(!TRSTATE||TRSTATE.k!==SEL||!(TRSTATE.nodes[0]&&TRSTATE.nodes[0].n.isConnected))return translateMail();TRSTATE.on=!TRSTATE.on;TRSTATE.nodes.forEach(x=>x.n.nodeValue=TRSTATE.on?x.tr:x.orig);trBar()}
+function trBar(err){const bar=$('trbar');if(!bar)return;const hf=$('hf');if(hf&&hf.__fit)setTimeout(hf.__fit,50);
+  if(err){bar.innerHTML=`${ic('lang')}<span>${esc(err)}</span><button class="btn sm" data-act="translate">Nochmal versuchen</button>`;return}
+  bar.innerHTML=TRSTATE&&TRSTATE.on?`${ic('lang')}<span>Aus dem Englischen übersetzt</span><button class="btn sm" data-act="troriginal">Original anzeigen</button>`
+    :`${ic('lang')}<span>Diese Mail ist auf Englisch.</span><button class="btn sm primary" data-act="troriginal">Auf Deutsch übersetzen</button>`}
+
 /* ---- Status der Hintergrund-Überwachung ---- */
 const agoL=x=>{const s=(Date.now()-x)/1000;return s<60?'gerade eben':s<3600?'vor '+Math.floor(s/60)+' Min':s<86400?'vor '+Math.floor(s/3600)+' Std':new Date(x).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'})};
 async function loadDiag(){const box=$('ndiag');if(!box)return;
@@ -1911,6 +1945,8 @@ document.addEventListener('click',async e=>{
     case 'del1':delDialog(curKeys());break;
     case 'move1':if(SEL)moveDialog([SEL]);break;
     case 'flag':{const m=CUR&&CUR.m;if(!m)break;m.flagged=!m.flagged;renderRead();renderList();bulk(m.flagged?'flag':'unflag',[keyOf(m)]).catch(()=>{});break}
+    case 'translate':translateMail();break;
+    case 'troriginal':trToggle();break;
     case 'loadimg':LOADREMOTE=true;renderRead();break;
     case 'reply':{if(!CUR||!CUR.d)break;const d=CUR.d,m=CUR.m;compose({title:'Antworten',acc:m.acc,to:d.replyTo||d.fromAddr,subject:/^(re|aw):/i.test(d.subject)?d.subject:'Re: '+d.subject,html:quoteHtml(d),ctx:d.text,ctxFrom:d.from,inReplyTo:d.messageId,references:[...(d.references||[]),d.messageId].filter(Boolean).join(' '),replyPath:m.path,replyUid:m.uid});break}
     case 'forward':{if(!CUR||!CUR.d)break;const d=CUR.d,m=CUR.m;compose({title:'Weiterleiten',acc:m.acc,subject:/^(fwd?|wg):/i.test(d.subject)?d.subject:'WG: '+d.subject,html:fwdHtml(d)});break}
