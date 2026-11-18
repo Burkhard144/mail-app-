@@ -140,6 +140,8 @@ a{color:var(--accent)}
 .chip svg{width:15px;height:15px;flex:none}
 .toolbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:14px 14px 10px}
 .toolbar .del{margin-left:auto}
+.toolbar .btn.del{width:60px!important;height:50px!important;border-radius:16px!important;padding:0!important}
+.toolbar .btn.del svg{width:30px;height:30px;stroke-width:2.6}
 .p-list{position:relative}
 .p-read{container-type:inline-size}
 @container (max-width:720px){.toolbar .lbl{display:none}.toolbar{flex-wrap:nowrap;gap:5px}.toolbar .btn{width:38px;height:38px;padding:0;flex:none}}
@@ -970,7 +972,7 @@ function renderRead(){
         <div class="meta-txt"><div class="who"><b>${esc(d.from)}</b></div><div class="muted">${esc(d.fromAddr)}</div>
         <div class="muted">An: ${esc(d.to)}${d.cc?' · Cc: '+esc(d.cc):''}</div>
         <div class="muted">${new Date(d.date).toLocaleString('de-DE',{weekday:'short',day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
-        <div class="who-act">${incoming?`<button class="btn sm addc" data-act="addcontact">${ic(known?'person':'personadd')}<span>${known?'Im Adressbuch':'Ins Adressbuch'}</span></button>${role!=='junk'&&!isTrash?`<button class="btn sm addc danger" data-act="block1">${ic('block')}<span>Sperren</span></button>`:''}`:''}<button class="btn sm addc primary" data-act="del1">${ic('trash')}<span>${isTrash?'Endgültig löschen':'In den Papierkorb'}</span></button></div></div>
+        <div class="who-act">${incoming?`<button class="btn sm addc" data-act="addcontact">${ic(known?'person':'personadd')}<span>${known?'Im Adressbuch':'Ins Adressbuch'}</span></button>${role!=='junk'&&!isTrash?`<button class="btn sm addc danger" data-act="block1">${ic('block')}<span>Sperren</span></button>`:''}`:''}</div></div>
         <span class="chip"><span class="dot" style="background:${a.color}"></span>${esc(a.email||'')}</span></div>
       <div class="aibox" id="aibox" hidden></div>
       ${P>=2&&(d.reasons&&d.reasons.length&&!d.allowed&&(d.score>=2||role==='junk'))?`<div class="spambox"><b>${d.score>=thr?'Spamverdacht':'Hinweise'}</b> (Wert ${d.score>=99?'Sperrliste':d.score}):<ul>${d.reasons.map(r=>`<li>${esc(r)}</li>`).join('')}</ul></div>`:''}
