@@ -15,6 +15,8 @@ android {
         targetSdk = 34
         versionCode = runNumber
         versionName = "1.0.$runNumber"
+        // Nur Handy-/Tablet-Prozessoren (ARM) – PC-Emulator-Teile (x86) machen die APK nur größer
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     signingConfigs {
