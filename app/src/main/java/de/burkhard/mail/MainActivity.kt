@@ -157,6 +157,19 @@ class MainActivity : AppCompatActivity() {
     private var pickResult: Uri? = null
     private val picker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> pickResult = uri; pickLatch?.countDown() }
 
+    private var multiLatch: CountDownLatch? = null
+    private var multiResult: List<Uri> = emptyList()
+    private val multiPicker = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> multiResult = uris ?: emptyList(); multiLatch?.countDown() }
+
+    /** Dateien zum Anhängen auswählen (mehrere möglich). */
+    fun pickFilesBlocking(): List<Uri> {
+        val l = CountDownLatch(1); multiLatch = l; multiResult = emptyList()
+        skipLockOnce = true
+        runOnUiThread { try { multiPicker.launch(arrayOf("*/*")) } catch (_: Exception) { l.countDown() } }
+        l.await(600, TimeUnit.SECONDS)
+        return multiResult
+    }
+
     fun pickFileBlocking(): Uri? {
         val l = CountDownLatch(1); pickLatch = l; pickResult = null
         skipLockOnce = true

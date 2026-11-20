@@ -632,17 +632,40 @@ class MailCore(private val store: Store) {
         d.optString("references").takeIf { it.isNotBlank() }?.let { m.setHeader("References", it) }
         val text = d.optString("text")
         val html = d.optString("html")
-        if (html.isNotBlank()) {
-            val alt = MimeMultipart("alternative")
-            alt.addBodyPart(MimeBodyPart().apply { setText(text, "UTF-8") })
-            alt.addBodyPart(MimeBodyPart().apply {
-                setContent("<!doctype html><html><head><meta charset=\"utf-8\"></head><body style=\"font-family:Arial,sans-serif;font-size:15px;line-height:1.5\">$html</body></html>", "text/html; charset=UTF-8")
-            })
-            m.setContent(alt)
-        } else m.setText(text, "UTF-8")
+        val atts = d.optJSONArray("attachments")
+        if (atts == null || atts.length() == 0) {
+            if (html.isNotBlank()) m.setContent(altPart(text, html)) else m.setText(text, "UTF-8")
+        } else {
+            // Text + Anhänge: multipart/mixed
+            val mixed = MimeMultipart("mixed")
+            mixed.addBodyPart(MimeBodyPart().apply { if (html.isNotBlank()) setContent(altPart(text, html)) else setText(text, "UTF-8") })
+            for (i in 0 until atts.length()) {
+                val a = atts.getJSONObject(i)
+                val f = attFile(a.getString("id"))
+                if (!f.exists()) throw UserError("Der Anhang „${a.optString("name")}“ ist nicht mehr vorhanden. Bitte neu anhängen.")
+                mixed.addBodyPart(MimeBodyPart().apply {
+                    attachFile(f)
+                    val mime = a.optString("mime").ifBlank { "application/octet-stream" }
+                    setHeader("Content-Type", mime)
+                    fileName = MimeUtility.encodeText(a.optString("name").ifBlank { "anhang" }, "UTF-8", null)
+                })
+            }
+            m.setContent(mixed)
+        }
         m.saveChanges()
         return m
     }
+
+    private fun altPart(text: String, html: String) = MimeMultipart("alternative").apply {
+        addBodyPart(MimeBodyPart().apply { setText(text, "UTF-8") })
+        addBodyPart(MimeBodyPart().apply {
+            setContent("<!doctype html><html><head><meta charset=\"utf-8\"></head><body style=\"font-family:Arial,sans-serif;font-size:15px;line-height:1.5\">$html</body></html>", "text/html; charset=UTF-8")
+        })
+    }
+
+    /** Ablage für Anhänge, die mit einer Mail verschickt werden sollen. */
+    fun attDir(): java.io.File = java.io.File(MailApp.app.filesDir, "anhaenge").apply { mkdirs() }
+    fun attFile(id: String): java.io.File = java.io.File(attDir(), id.replace("/", "").replace("..", ""))
 
     fun send(d: JSONObject, draft: Boolean) {
         val acc = store.account(d.getString("acc"))
@@ -670,6 +693,8 @@ class MailCore(private val store: Store) {
                 }
             }
         } catch (e: Exception) { if (draft) throw friendly(e, acc) }
+        // nach dem Versand die Anhang-Kopien aufräumen (Entwürfe behalten sie)
+        if (!draft) d.optJSONArray("attachments")?.let { a -> for (i in 0 until a.length()) try { attFile(a.getJSONObject(i).getString("id")).delete() } catch (_: Exception) {} }
         val rp = d.optString("replyPath"); val ru = d.optLong("replyUid", 0)
         if (!draft && rp.isNotBlank() && ru > 0) {
             try {

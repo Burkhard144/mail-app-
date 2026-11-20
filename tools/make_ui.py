@@ -68,7 +68,7 @@ rep("  onSw('ai-on',v=>setAndRefresh({ai:v},v?'KI-Assistent an':'KI-Assistent au
 rx(r"function queueSend\(payload,delay,pre\)\{.*?\n  obTimer=setTimeout\(obTick,1000\)\}\n", r'''async function queueSend(payload,delay,pre){try{const r=await api('queue',{payload,delay});OUTBOX.push({id:r.id,payload,pre,sendAt:r.sendAt});renderSide();
   toastAct(`Wird in ${fmtDelay(delay)} gesendet`,'Zurückholen',()=>recall(r.id),10000,'Jetzt senden',()=>sendNow(r.id));obTick()}catch(e){toast(e.message)}}
 async function recall(id){const o=OUTBOX.find(x=>x.id===id)||{};OUTBOX=OUTBOX.filter(x=>x.id!==id);renderSide();if(V.type==='outbox')renderList();
-  try{const r=await api('recall',{id});const p=r.payload;compose({...(o.pre||{}),title:'Zurückgeholt',acc:p.acc,to:p.to,cc:p.cc,bcc:p.bcc,subject:p.subject});const ed=$('c-body');if(ed)ed.innerHTML=p.html;toast('Mail zurückgeholt. Du kannst sie jetzt ändern.')}catch(e){toast(e.message)}}
+  try{const r=await api('recall',{id});const p=r.payload;compose({...(o.pre||{}),title:'Zurückgeholt',acc:p.acc,to:p.to,cc:p.cc,bcc:p.bcc,subject:p.subject,atts:p.attachments||[],fwdAtts:[]});const ed=$('c-body');if(ed)ed.innerHTML=p.html;toast('Mail zurückgeholt. Du kannst sie jetzt ändern.')}catch(e){toast(e.message)}}
 async function sendNow(id){OUTBOX=OUTBOX.filter(x=>x.id!==id);renderSide();if(V.type==='outbox')renderList();toast('Wird gesendet …');try{const r=await api('sendNow',{id});toast(r&&r.already?'Ist schon unterwegs':'Gesendet ✓');loadOverviews()}catch(e){toast(e.message)}}
 let obTimer=null;
 function obTick(){clearTimeout(obTimer);if(!OUTBOX.length){if(V.type==='outbox')renderList();return}

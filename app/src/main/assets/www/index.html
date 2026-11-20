@@ -248,6 +248,14 @@ details.adv summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--mu
 .diag-acc{display:grid;gap:2px;padding:8px 0;border-top:1px solid var(--line)}
 .diag-acc small{color:var(--muted);font-size:13px}
 .row-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.c-atts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.c-atts:empty{display:none}
+.c-att{display:inline-flex;align-items:center;gap:6px;padding:5px 4px 5px 10px;border-radius:12px;background:var(--sel);font-size:13px;max-width:100%;min-width:0}
+.c-att>svg{width:15px;height:15px;flex:none;color:var(--accent)}
+.c-att span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.c-att.ld{opacity:.7}
+.c-att button{border:0;background:none;color:var(--muted);width:30px;height:30px;display:grid;place-items:center;border-radius:9px;cursor:pointer;flex:none}
+.c-att button svg{width:15px;height:15px}
 .pw-wrap{position:relative;display:block}
 .pw-wrap input{width:100%;padding-right:58px;box-sizing:border-box}
 .pw-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:44px;height:38px;border-radius:12px;border:1px solid var(--line);display:grid;place-items:center;color:var(--muted);cursor:pointer;
@@ -1485,7 +1493,7 @@ function acWire(id,onGroup){
 /* ---- Schreiben: Signatur, Formatierung, KI, Zurückholen ---- */
 const txt2html=s=>esc(s).replace(/\n/g,'<br>');
 function quoteHtml(d){return `<div class="q-head">Am ${esc(new Date(d.date).toLocaleString('de-DE'))} schrieb ${esc(d.from||d.fromAddr)}:</div><blockquote style="margin:6px 0 0 4px;padding-left:10px;border-left:3px solid #8bc7c3;color:#445">${txt2html(String(d.text||'').trim())}</blockquote>`}
-function fwdHtml(d){return `<div class="q-head">---------- Weitergeleitete Nachricht ----------<br>Von: ${esc(d.from)} &lt;${esc(d.fromAddr)}&gt;<br>Datum: ${esc(new Date(d.date).toLocaleString('de-DE'))}<br>Betreff: ${esc(d.subject)}<br>An: ${esc(d.to)}</div><br>${txt2html(String(d.text||'').trim())}${d.attachments&&d.attachments.length?'<br><br>(Anhänge werden nicht mitgesendet.)':''}`}
+function fwdHtml(d){return `<div class="q-head">---------- Weitergeleitete Nachricht ----------<br>Von: ${esc(d.from)} &lt;${esc(d.fromAddr)}&gt;<br>Datum: ${esc(new Date(d.date).toLocaleString('de-DE'))}<br>Betreff: ${esc(d.subject)}<br>An: ${esc(d.to)}</div><br>${txt2html(String(d.text||'').trim())}`}
 const sigList=()=>S_().sigs||[];
 const sigIdFor=acc=>(S_().sigDefault||{})[acc]||'';
 function sigHtml(id){const x=sigList().find(s=>s.id===id);return x?x.html:''}
@@ -1528,8 +1536,24 @@ function compose(pre={}){
     </div>
     <div class="aibox" id="c-ai" hidden></div>
     <div id="c-body" class="editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Nachricht">${body}</div>
+    <div class="c-atts" id="c-atts"></div>
+    <input type="file" id="c-file" multiple hidden>
     <p class="errtxt" id="c-err" hidden></p>
-    <div class="actions"><button class="btn" id="c-draft">Als Entwurf</button><span class="spacer"></span><button class="btn primary" id="c-send">${ic('sent')}Senden</button></div>`,'compose');
+    <div class="actions"><button class="btn" id="c-att">${ic('clip')}Anhang</button><button class="btn" id="c-draft">Als Entwurf</button><span class="spacer"></span><button class="btn primary" id="c-send">${ic('sent')}Senden</button></div>`,'compose');
+  /* ---- Anhänge ---- */
+  let ATTS=(pre.atts||[]).map(a=>({...a}));
+  const renderAtts=()=>{const box=$('c-atts');if(!box)return;const tot=ATTS.reduce((s,a)=>s+(a.size||0),0);
+    box.innerHTML=ATTS.map((a,i)=>`<span class="c-att ${a.loading?'ld':''}">${ic('clip')}<span>${esc(a.name)}${a.loading?' · wird geladen …':a.size?' · '+fmtSize(a.size):''}</span>${a.loading?'':`<button type="button" data-rm="${i}" aria-label="${esc(a.name)} entfernen">${ic('x')}</button>`}</span>`).join('')
+      +(tot>25e6?`<p class="errtxt" style="margin:4px 0 0;width:100%">Zusammen ${fmtSize(tot)} – mehr als 25 MB nehmen die meisten Mailanbieter nicht an.</p>`:'');
+    box.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{const a=ATTS.splice(+b.dataset.rm,1)[0];if(a&&window.MailBridge&&a.id)api('dropAttachment',{id:a.id}).catch(()=>{});renderAtts()})};
+  $('c-att').onclick=async()=>{
+    if(window.MailBridge){try{const r=await api('pickAttachments');(r.files||[]).forEach(f=>ATTS.push(f));renderAtts()}catch(e){showErr('c-err',e.message)}}
+    else $('c-file').click()};
+  $('c-file').onchange=e=>{[...e.target.files].forEach(f=>ATTS.push({id:'v'+Date.now()+Math.random().toString(36).slice(2,6),name:f.name,size:f.size,mime:f.type||'application/octet-stream'}));e.target.value='';renderAtts()};
+  (pre.fwdAtts||[]).forEach(fa=>{const ent={name:fa.name,size:fa.size,loading:true};ATTS.push(ent);
+    api('fwdAttachment',{acc:fa.acc,path:fa.path,uid:fa.uid,i:fa.i,name:fa.name,size:fa.size}).then(r=>{Object.assign(ent,{id:r.id,name:r.name,size:r.size,mime:r.mime,loading:false});renderAtts()})
+      .catch(e=>{ATTS=ATTS.filter(x=>x!==ent);renderAtts();toast('Anhang „'+fa.name+'“: '+e.message)})});
+  renderAtts();
   const ed=$('c-body');const bodyEl=()=>ed.querySelector('.gp-body');
   try{document.execCommand('defaultParagraphSeparator',false,'div')}catch(_){}
   document.querySelectorAll('.fmt button').forEach(b=>b.addEventListener('pointerdown',e=>e.preventDefault()));
@@ -1578,7 +1602,9 @@ function compose(pre={}){
   const go=async kind=>{const b=$(kind==='send'?'c-send':'c-draft');$('c-err').hidden=true;
     const clean=v=>v.trim().replace(/,\s*$/,'');
     const payload={acc:$('c-from').value,to:clean($('c-to').value),cc:clean($('c-cc').value),bcc:clean($('c-bcc').value),subject:$('c-subj').value,text:ed.innerText.trim(),html:ed.innerHTML.trim(),
-        inReplyTo:pre.inReplyTo,references:pre.references,reply:!!pre.replyUid,replyPath:pre.replyPath,replyUid:pre.replyUid};
+        inReplyTo:pre.inReplyTo,references:pre.references,reply:!!pre.replyUid,replyPath:pre.replyPath,replyUid:pre.replyUid,
+        attachments:ATTS.filter(a=>a.id&&!a.loading).map(a=>({id:a.id,name:a.name,mime:a.mime,size:a.size}))};
+    if(ATTS.some(a=>a.loading))return showErr('c-err','Die Anhänge werden noch geladen. Bitte einen Moment warten.');
     if(kind==='send'&&!/[^\s@]+@[^\s@]+\.[^\s@]+/.test(payload.to+payload.cc+payload.bcc))return showErr('c-err','Bitte mindestens einen Empfänger eintragen.');
     const delay=Number(S_().undoDelay||0);
     if(kind==='send'&&delay>0){queueSend(payload,delay,pre);closeModal();return}
@@ -1591,7 +1617,7 @@ const fmtDelay=s=>s>=60?`${Math.round(s/60)} Minute${s>=120?'n':''}`:`${s} Sekun
 async function queueSend(payload,delay,pre){try{const r=await api('queue',{payload,delay});OUTBOX.push({id:r.id,payload,pre,sendAt:r.sendAt});renderSide();
   toastAct(`Wird in ${fmtDelay(delay)} gesendet`,'Zurückholen',()=>recall(r.id),10000,'Jetzt senden',()=>sendNow(r.id));obTick()}catch(e){toast(e.message)}}
 async function recall(id){const o=OUTBOX.find(x=>x.id===id)||{};OUTBOX=OUTBOX.filter(x=>x.id!==id);renderSide();if(V.type==='outbox')renderList();
-  try{const r=await api('recall',{id});const p=r.payload;compose({...(o.pre||{}),title:'Zurückgeholt',acc:p.acc,to:p.to,cc:p.cc,bcc:p.bcc,subject:p.subject});const ed=$('c-body');if(ed)ed.innerHTML=p.html;toast('Mail zurückgeholt. Du kannst sie jetzt ändern.')}catch(e){toast(e.message)}}
+  try{const r=await api('recall',{id});const p=r.payload;compose({...(o.pre||{}),title:'Zurückgeholt',acc:p.acc,to:p.to,cc:p.cc,bcc:p.bcc,subject:p.subject,atts:p.attachments||[],fwdAtts:[]});const ed=$('c-body');if(ed)ed.innerHTML=p.html;toast('Mail zurückgeholt. Du kannst sie jetzt ändern.')}catch(e){toast(e.message)}}
 async function sendNow(id){OUTBOX=OUTBOX.filter(x=>x.id!==id);renderSide();if(V.type==='outbox')renderList();toast('Wird gesendet …');try{const r=await api('sendNow',{id});toast(r&&r.already?'Ist schon unterwegs':'Gesendet ✓');loadOverviews()}catch(e){toast(e.message)}}
 let obTimer=null;
 function obTick(){clearTimeout(obTimer);if(!OUTBOX.length){if(V.type==='outbox')renderList();return}
@@ -1951,7 +1977,8 @@ document.addEventListener('click',async e=>{
     case 'troriginal':trToggle();break;
     case 'loadimg':LOADREMOTE=true;renderRead();break;
     case 'reply':{if(!CUR||!CUR.d)break;const d=CUR.d,m=CUR.m;compose({title:'Antworten',acc:m.acc,to:d.replyTo||d.fromAddr,subject:/^(re|aw):/i.test(d.subject)?d.subject:'Re: '+d.subject,html:quoteHtml(d),ctx:d.text,ctxFrom:d.from,inReplyTo:d.messageId,references:[...(d.references||[]),d.messageId].filter(Boolean).join(' '),replyPath:m.path,replyUid:m.uid});break}
-    case 'forward':{if(!CUR||!CUR.d)break;const d=CUR.d,m=CUR.m;compose({title:'Weiterleiten',acc:m.acc,subject:/^(fwd?|wg):/i.test(d.subject)?d.subject:'WG: '+d.subject,html:fwdHtml(d)});break}
+    case 'forward':{if(!CUR||!CUR.d)break;const d=CUR.d,m=CUR.m;compose({title:'Weiterleiten',acc:m.acc,subject:/^(fwd?|wg):/i.test(d.subject)?d.subject:'WG: '+d.subject,html:fwdHtml(d),
+      fwdAtts:(d.attachments||[]).map(t=>({acc:m.acc,path:m.path,uid:m.uid,i:t.i,name:t.filename,size:t.size}))});break}
     case 'compose':compose();break;
     case 'listmenu':listMenu();break;
     case 'setview':VIEW=t.dataset.v;try{localStorage.setItem('gp-view',VIEW)}catch(_){}closeModal();renderList();break;

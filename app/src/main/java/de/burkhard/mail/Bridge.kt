@@ -158,6 +158,28 @@ class Bridge(private val act: MainActivity) {
                 return n
             }
             "translate" -> return translate(b.getJSONArray("texts"))
+            "pickAttachments" -> {
+                val out = JSONArray()
+                for (u in act.pickFilesBlocking()) {
+                    var name = "anhang"
+                    act.contentResolver.query(u, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) name = it.getString(0) ?: name }
+                    val id = System.currentTimeMillis().toString() + "_" + (1000..9999).random()
+                    val f = core.attFile(id)
+                    val copied = act.contentResolver.openInputStream(u)?.use { input -> f.outputStream().use { input.copyTo(it) }; true } ?: false
+                    if (!copied) continue
+                    if (f.length() > 30_000_000) { f.delete(); throw UserError("„$name“ ist zu groß (über 30 MB). Die meisten Mailanbieter nehmen höchstens 20–25 MB an.") }
+                    out.put(JSONObject().put("id", id).put("name", name).put("size", f.length()).put("mime", act.contentResolver.getType(u) ?: "application/octet-stream"))
+                }
+                return ok().put("files", out)
+            }
+            "dropAttachment" -> { core.attFile(b.getString("id")).delete(); return ok() }
+            "fwdAttachment" -> {
+                // Anhang der Original-Mail für das Weiterleiten übernehmen
+                val (name, type, bytes) = core.attachment(store.account(b.getString("acc")), b.getString("path"), b.getLong("uid"), b.getInt("i"))
+                val id = System.currentTimeMillis().toString() + "_" + (1000..9999).random()
+                core.attFile(id).writeBytes(bytes)
+                return ok().put("id", id).put("name", name).put("size", bytes.size).put("mime", type)
+            }
             "diag" -> {
                 val pm = act.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
                 val d = store.getJson("diag")
