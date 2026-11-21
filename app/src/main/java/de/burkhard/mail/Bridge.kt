@@ -368,10 +368,38 @@ class Bridge(private val act: MainActivity) {
         return out
     }
 
+    /**
+     * Viele Absender schicken PDFs & Co. nur als „irgendeine Datei“ (application/octet-stream).
+     * Dann bietet Android z. B. Navi-Apps an. Deshalb den echten Typ aus Dateiendung bzw. Dateiinhalt bestimmen.
+     */
+    private fun realMime(name: String, type: String, bytes: ByteArray): String {
+        val t = type.lowercase().substringBefore(';').trim()
+        val generic = t.isBlank() || !t.contains('/') || t in setOf("application/octet-stream", "application/x-download", "application/force-download",
+            "application/download", "binary/octet-stream", "application/binary", "application/unknown", "application/x-unknown", "application/save")
+        val ext = name.substringAfterLast('.', "").lowercase()
+        val byExt = if (ext.isNotBlank()) MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) else null
+        val byContent = when {
+            bytes.size > 4 && bytes[0] == '%'.code.toByte() && bytes[1] == 'P'.code.toByte() && bytes[2] == 'D'.code.toByte() && bytes[3] == 'F'.code.toByte() -> "application/pdf"
+            bytes.size > 3 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() -> "image/jpeg"
+            bytes.size > 8 && bytes[0] == 0x89.toByte() && bytes[1] == 'P'.code.toByte() && bytes[2] == 'N'.code.toByte() -> "image/png"
+            else -> null
+        }
+        return when {
+            byContent == "application/pdf" -> "application/pdf"
+            generic && byExt != null -> byExt
+            generic && byContent != null -> byContent
+            generic -> "application/octet-stream"
+            else -> t
+        }
+    }
+
     private fun openAttachment(b: JSONObject) {
         val (name, type, bytes) = core.attachment(store.account(b.getString("acc")), b.getString("path"), b.getLong("uid"), b.getInt("i"))
-        val safe = name.replace(Regex("[\\\\/:*?\"<>|]"), "_")
-        val mime = type.ifBlank { MimeTypeMap.getSingleton().getMimeTypeFromExtension(safe.substringAfterLast('.', "").lowercase()) ?: "application/octet-stream" }
+        val clean = name.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+        val mime = realMime(clean, type, bytes)
+        // Dateiendung ergänzen, falls sie fehlt (z. B. „Rechnung“ statt „Rechnung.pdf“) – PDF-Apps erkennen die Datei dann sicher
+        val ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime)
+        val safe = if (ext != null && !clean.lowercase().endsWith(".$ext") && !clean.contains('.')) "$clean.$ext" else clean
         if (b.optString("mode") == "save") {
             if (Build.VERSION.SDK_INT >= 29) {
                 val values = ContentValues().apply {
