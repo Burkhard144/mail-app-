@@ -579,8 +579,9 @@ details.adv summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--mu
 /* Tastatur */
 input,textarea,[contenteditable="true"]{scroll-margin-top:96px}
 .c-row input{scroll-margin-top:24px}
-/* Bezeichnungen im Schreiben-Fenster: alle gleich breit wie die längste, danach Abstand */
-.c-row label{width:var(--lw,auto);padding-right:8px;white-space:nowrap}
+/* Bezeichnungen im Schreiben-Fenster: so breit wie das Wort, Eingabefeld beginnt direkt danach (eine Leerstelle) */
+.c-row label{width:auto;white-space:nowrap}
+.c-row label+input{margin-left:calc(.28em - 8px)}
 .kb-pad{padding-bottom:calc(var(--kb) + 40px)!important}
 html.kb-open .overlay,html.kb-open .pop-back{bottom:var(--kb)}
 html.kb-open .modal{max-height:calc(100% - 12px)}
@@ -1592,9 +1593,6 @@ function compose(pre={}){
   document.querySelectorAll('#c-colors [data-color]').forEach(b=>b.onclick=()=>{const c=b.dataset.color||getComputedStyle(ed).color;cmd('foreColor',c);
     $('c-coldot').style.background=b.dataset.color||'';toggleRow('c-colors','c-colbtn',[])});
   $('c-aibtn').onclick=()=>{if(!aiReady())return;toggleRow('c-aimenu','c-aibtn',[['c-sizes','c-sizebtn'],['c-colors','c-colbtn']])};
-  const fitLabels=()=>{const f=document.querySelector('.modal .c-fields');if(!f)return;f.style.removeProperty('--lw');
-    const w=Math.max(0,...[...f.querySelectorAll('.c-row label')].map(l=>l.offsetWidth));if(w)f.style.setProperty('--lw',Math.ceil(w)+'px')};
-  fitLabels();if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fitLabels);
   $('c-cctog').onclick=()=>{$('c-ccrow').hidden=false;$('c-bccrow').hidden=false;$('c-cctog').hidden=true;$('c-cc').focus()};
   const onGroup=(g,inp)=>{const target=g.bcc?$('c-bcc'):inp;if(g.bcc){$('c-ccrow').hidden=false;$('c-bccrow').hidden=false;$('c-cctog').hidden=true}
     const cur=target.value.trim().replace(/,\s*$/,'');target.value=(cur?cur+', ':'')+g.members.join(', ')+', ';toast(`${g.members.length} Empfänger aus „${g.name}“${g.bcc?' als Bcc':''} eingefügt`)};
