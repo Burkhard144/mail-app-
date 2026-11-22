@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import android.view.DragEvent
 import android.view.WindowManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -73,6 +74,27 @@ class MainActivity : AppCompatActivity() {
         }
         web.loadUrl("https://appassets.androidplatform.net/assets/www/index.html")
 
+        // Text aus einer anderen App hineinziehen (geteilter Bildschirm / schwebendes Fenster)
+        web.setOnDragListener { _, e ->
+            when (e.action) {
+                DragEvent.ACTION_DRAG_STARTED -> e.clipDescription?.hasMimeType("text/*") == true
+                DragEvent.ACTION_DROP -> {
+                    val clip = e.clipData
+                    val sb = StringBuilder()
+                    if (clip != null) for (k in 0 until clip.itemCount) {
+                        val t = clip.getItemAt(k).coerceToText(this)?.toString()
+                        if (!t.isNullOrBlank()) { if (sb.isNotEmpty()) sb.append('\n'); sb.append(t) }
+                    }
+                    if (sb.isNotEmpty()) {
+                        val d = resources.displayMetrics.density
+                        js("window.__dropText&&window.__dropText(${JSONObject.quote(sb.toString())},${e.x / d},${e.y / d})")
+                        true
+                    } else false
+                }
+                else -> true
+            }
+        }
+
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 web.evaluateJavascript("window.__back?window.__back():false") { r -> if (r != "true") { isEnabled = false; onBackPressedDispatcher.onBackPressed(); isEnabled = true } }
@@ -97,6 +119,14 @@ class MainActivity : AppCompatActivity() {
         if (i.action == Intent.ACTION_SENDTO) i.data?.let { u: Uri ->
             val to = u.schemeSpecificPart.substringBefore('?')
             js("window.__compose&&window.__compose(${JSONObject.quote(to)})"); i.action = null
+        }
+        // „Teilen“ → Mail: geteilter Text wird eine neue E-Mail
+        if (i.action == Intent.ACTION_SEND) {
+            val text = i.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString().orEmpty()
+            val subject = i.getStringExtra(Intent.EXTRA_SUBJECT).orEmpty()
+            if (text.isNotBlank() || subject.isNotBlank())
+                js("window.__shareText&&window.__shareText(${JSONObject.quote(subject)},${JSONObject.quote(text)})")
+            i.action = null
         }
     }
 

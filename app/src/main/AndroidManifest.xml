@@ -40,6 +40,12 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="mailto" />
             </intent-filter>
+            <!-- Text von anderen Apps als neue Mail (z. B. aus der Sprach-App) -->
+            <intent-filter android:label="Als E-Mail senden">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <service

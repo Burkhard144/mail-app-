@@ -795,7 +795,7 @@ function showLock(){
     <p class="hint small">Tippe auf das Symbol, falls die Abfrage nicht von selbst erscheint.</p></div></div>`;
   $('fp').onclick=()=>MailBridge.unlock();setTimeout(()=>{try{MailBridge.unlock()}catch(e){}},250);
 }
-window.__unlocked=()=>{const f=$('fp');if(f)f.classList.add('ok');setTimeout(async()=>{UNLOCKED=true;await start();if(window.__pendingOpen){NOTIF=window.__pendingOpen;window.__pendingOpen=null;openFromNotif()}},250)};
+window.__unlocked=()=>{const f=$('fp');if(f)f.classList.add('ok');setTimeout(async()=>{UNLOCKED=true;await start();flushCompose();if(window.__pendingOpen){NOTIF=window.__pendingOpen;window.__pendingOpen=null;openFromNotif()}},250)};
 window.__relock=()=>{UNLOCKED=false;closeModal();closeNotif();showLock()};
 async function start(){
   if(!CFG.__loaded){try{CFG=await api('config');CFG.__loaded=true}catch(e){}}
@@ -805,6 +805,7 @@ async function start(){
   try{OUTBOX=(await api('outbox')).items||[];if(OUTBOX.length)obTick()}catch(e){}
   if(!CFG.accounts.length){renderSide();renderList();setPane('side');accForm();return}
   renderSide();
+  flushCompose();
   LOADING=true;renderList();
   /* Ordner vom letzten Mal sofort benutzen – Liste lädt gleich, Zähler kommen parallel dazu */
   let saved={};try{saved=JSON.parse(localStorage.getItem('gp-ov')||'{}')}catch(e){}
@@ -2084,7 +2085,27 @@ window.__back=()=>{const p=document.querySelector('.pop-back');if(p){p.remove();
   return false};
 window.__newMail=n=>{notifyPopup(n);loadOverviews();if(V.type==='uni'||V.type==='box')loadList(true)};
 window.__openMail=async n=>{NOTIF=n;if(!UNLOCKED){window.__pendingOpen=n;return}await openFromNotif()};
-window.__compose=to=>{if(UNLOCKED)compose({to:to+', '})};
+/* Neue Mail von außen (mailto, „Teilen“, Ziehen): wartet bei Bedarf, bis die App entsperrt und geladen ist */
+let MAILREADY=false;
+const canCompose=()=>MAILREADY&&(UNLOCKED||!!(CFG.settings&&CFG.settings.lock&&CFG.settings.lock.on===false))&&!!(CFG.accounts&&CFG.accounts.length);
+function queueCompose(pre){if(canCompose())compose(pre);else window.__pendingCompose=pre}
+function flushCompose(){if(!CFG.accounts||!CFG.accounts.length)return;MAILREADY=true;const p=window.__pendingCompose;if(p&&canCompose()){window.__pendingCompose=null;setTimeout(()=>compose(p),60)}}
+const textHtml=t=>esc(t).replace(/\r?\n/g,'<br>');
+window.__compose=to=>queueCompose({to:to+', '});
+window.__shareText=(subject,text)=>queueCompose({subject:subject||'',body:textHtml(text||'')});
+window.__dropText=(text,x,y)=>{
+  const body=$('c-body');
+  if(!body||!canCompose()){queueCompose({body:textHtml(text)});return}
+  const el=document.elementFromPoint(x,y);
+  if(el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA')&&el.closest('.c-fields')){
+    const a=el.selectionStart??el.value.length,b=el.selectionEnd??a;
+    el.value=el.value.slice(0,a)+text+el.value.slice(b);el.focus();el.dispatchEvent(new Event('input',{bubbles:true}));return}
+  let r=null;
+  if(el&&body.contains(el)&&document.caretRangeFromPoint){r=document.caretRangeFromPoint(x,y);if(r&&!body.contains(r.startContainer))r=null}
+  if(!r){const g=body.querySelector('.gp-body')||body;r=document.createRange();r.selectNodeContents(g);r.collapse(false)}
+  body.focus();const sel=getSelection();sel.removeAllRanges();sel.addRange(r);
+  document.execCommand('insertText',false,text);
+};
 start();
 </script>
 </body></html>
