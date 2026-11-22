@@ -579,6 +579,8 @@ details.adv summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--mu
 /* Tastatur */
 input,textarea,[contenteditable="true"]{scroll-margin-top:96px}
 .c-row input{scroll-margin-top:24px}
+/* Bezeichnungen im Schreiben-Fenster: alle gleich breit wie die längste, danach Abstand */
+.c-row label{width:var(--lw,auto);padding-right:8px;white-space:nowrap}
 .kb-pad{padding-bottom:calc(var(--kb) + 40px)!important}
 html.kb-open .overlay,html.kb-open .pop-back{bottom:var(--kb)}
 html.kb-open .modal{max-height:calc(100% - 12px)}
@@ -1532,12 +1534,12 @@ function compose(pre={}){
   const showCc=!!(pre.cc||pre.bcc);
   modal(`<div class="c-head"><h3>${pre.title||'Neue E-Mail'}</h3><button class="btn icon closex" data-act="close" aria-label="Schließen">${ic('x')}</button></div>
     <div class="c-fields">
-      <div class="c-row"><label for="c-from">Von</label><select id="c-from" aria-label="Absender">${CFG.accounts.map(a=>`<option value="${a.id}" ${a.id===defAcc?'selected':''}>${a.id===S_().defaultFrom?'★ ':''}${esc(a.name)} – ${esc(a.email)}</option>`).join('')}</select><button type="button" class="btn sm" id="c-setdef" hidden title="Als Standard-Absender merken">${ic('star')}Standard</button></div>
-      <div class="c-row"><label for="c-to">An</label><input id="c-to" type="text" inputmode="email" autocomplete="off" value="${esc(pre.to||'')}" placeholder="Name, Adresse oder Gruppe"><button type="button" class="btn sm" id="c-cctog" ${showCc?'hidden':''} aria-label="Cc und Bcc hinzufügen">Cc/Bcc</button></div>
-      <div class="c-row" id="c-ccrow" ${showCc?'':'hidden'}><label for="c-cc">Cc</label><input id="c-cc" type="text" inputmode="email" autocomplete="off" value="${esc(pre.cc||'')}" placeholder="Name oder Adresse"></div>
-      <div class="c-row" id="c-bccrow" ${showCc?'':'hidden'}><label for="c-bcc">Bcc</label><input id="c-bcc" type="text" inputmode="email" autocomplete="off" value="${esc(pre.bcc||'')}" placeholder="Unsichtbar für andere Empfänger"></div>
-      <div class="c-row"><label for="c-subj">Betreff</label><input id="c-subj" value="${esc(pre.subject||'')}"></div>
-      <div class="c-row"><label for="c-sig">Signatur</label><select id="c-sig" aria-label="Signatur">${sigOpts(sigIdFor(defAcc))}</select></div>
+      <div class="c-row"><label for="c-from">Von:</label><select id="c-from" aria-label="Absender">${CFG.accounts.map(a=>`<option value="${a.id}" ${a.id===defAcc?'selected':''}>${a.id===S_().defaultFrom?'★ ':''}${esc(a.name)} – ${esc(a.email)}</option>`).join('')}</select><button type="button" class="btn sm" id="c-setdef" hidden title="Als Standard-Absender merken">${ic('star')}Standard</button></div>
+      <div class="c-row"><label for="c-to">An:</label><input id="c-to" type="text" inputmode="email" autocomplete="off" value="${esc(pre.to||'')}" placeholder="Name, Adresse oder Gruppe"><button type="button" class="btn sm" id="c-cctog" ${showCc?'hidden':''} aria-label="Cc und Bcc hinzufügen">Cc/Bcc</button></div>
+      <div class="c-row" id="c-ccrow" ${showCc?'':'hidden'}><label for="c-cc">Cc:</label><input id="c-cc" type="text" inputmode="email" autocomplete="off" value="${esc(pre.cc||'')}" placeholder="Name oder Adresse"></div>
+      <div class="c-row" id="c-bccrow" ${showCc?'':'hidden'}><label for="c-bcc">Bcc:</label><input id="c-bcc" type="text" inputmode="email" autocomplete="off" value="${esc(pre.bcc||'')}" placeholder="Unsichtbar für andere Empfänger"></div>
+      <div class="c-row"><label for="c-subj">Betreff:</label><input id="c-subj" value="${esc(pre.subject||'')}"></div>
+      <div class="c-row"><label for="c-sig">Signatur:</label><select id="c-sig" aria-label="Signatur">${sigOpts(sigIdFor(defAcc))}</select></div>
     </div>
     <div class="fmt" role="toolbar" aria-label="Text formatieren">
       <button type="button" class="btn icon sm" data-fmt="bold" aria-label="Fett" title="Fett"><b>F</b></button>
@@ -1590,6 +1592,9 @@ function compose(pre={}){
   document.querySelectorAll('#c-colors [data-color]').forEach(b=>b.onclick=()=>{const c=b.dataset.color||getComputedStyle(ed).color;cmd('foreColor',c);
     $('c-coldot').style.background=b.dataset.color||'';toggleRow('c-colors','c-colbtn',[])});
   $('c-aibtn').onclick=()=>{if(!aiReady())return;toggleRow('c-aimenu','c-aibtn',[['c-sizes','c-sizebtn'],['c-colors','c-colbtn']])};
+  const fitLabels=()=>{const f=document.querySelector('.modal .c-fields');if(!f)return;f.style.removeProperty('--lw');
+    const w=Math.max(0,...[...f.querySelectorAll('.c-row label')].map(l=>l.offsetWidth));if(w)f.style.setProperty('--lw',Math.ceil(w)+'px')};
+  fitLabels();if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fitLabels);
   $('c-cctog').onclick=()=>{$('c-ccrow').hidden=false;$('c-bccrow').hidden=false;$('c-cctog').hidden=true;$('c-cc').focus()};
   const onGroup=(g,inp)=>{const target=g.bcc?$('c-bcc'):inp;if(g.bcc){$('c-ccrow').hidden=false;$('c-bccrow').hidden=false;$('c-cctog').hidden=true}
     const cur=target.value.trim().replace(/,\s*$/,'');target.value=(cur?cur+', ':'')+g.members.join(', ')+', ';toast(`${g.members.length} Empfänger aus „${g.name}“${g.bcc?' als Bcc':''} eingefügt`)};
