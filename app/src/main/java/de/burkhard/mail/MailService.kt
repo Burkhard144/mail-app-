@@ -127,13 +127,22 @@ class MailService : Service() {
         }
     }
 
-    override fun onDestroy() { stopWatchers(); super.onDestroy() }
+    override fun onCreate() { super.onCreate(); instance = this }
+
+    override fun onDestroy() { instance = null; stopWatchers(); super.onDestroy() }
 
     object App { @Volatile var foreground = false }
 
     companion object {
         const val ACTION_NEW_MAIL = "de.burkhard.mail.NEW_MAIL"
         const val ACTION_RELOAD = "de.burkhard.mail.RELOAD"
+        @Volatile private var instance: MailService? = null
+
+        /** Netz gewechselt: Überwachung sofort neu verbinden (sonst hängt sie bis zu 10 Minuten an der toten Verbindung). */
+        fun networkChanged() {
+            val s = instance ?: return
+            Handler(Looper.getMainLooper()).postDelayed({ try { s.restartWatchers() } catch (_: Exception) {} }, 1500)
+        }
         private val newLock = Any()
 
         /** Meldet alle Mails im Posteingang, die neuer sind als die zuletzt gemeldete (für Dienst und 15-Minuten-Prüfung). */

@@ -136,6 +136,8 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         MailService.App.foreground = true
         Overlay.close(this)
+        // War Mail länger als 45 s im Hintergrund: alte (vermutlich tote) Verbindungen verwerfen, damit die erste Anfrage nicht hängt
+        if (stoppedAt > 0 && SystemClock.elapsedRealtime() - stoppedAt > 45_000) MailApp.app.core.resetConnections()
         if (skipLockOnce) { skipLockOnce = false; return }
         val lock = MailApp.app.store.load().getJSONObject("settings").optJSONObject("lock")
         val on = lock?.optBoolean("on", true) ?: true

@@ -112,6 +112,17 @@ class MailCore(private val store: Store) {
     fun drop(id: String) { dropKey(id); dropKey(id + READ); dropKey(id + "#zaehler"); folderCache.remove(id); synchronized(readCache) { readCache.keys.removeAll { it.startsWith("$id|") } } }
     fun dropAll() { stores.keys.toList().forEach { dropKey(it) }; folderCache.clear(); synchronized(readCache) { readCache.clear() } }
 
+    /**
+     * Nach einer Pause oder einem Netzwechsel (WLAN ↔ Mobilfunk) sind die offenen Verbindungen oft „tot“,
+     * ohne dass das Handy es merkt – die nächste Anfrage würde bis zur Zeitgrenze (30 s) hängen.
+     * Deshalb alle Verbindungen sofort verwerfen; die nächste Anfrage baut in ca. 1 s eine frische auf.
+     */
+    fun resetConnections() {
+        val old = stores.values.toList() + openRead.values.toList()
+        stores.clear(); openRead.clear()
+        if (old.isNotEmpty()) Thread { old.forEach { try { if (it is IMAPFolder) it.close(false) else (it as IMAPStore).close() } catch (_: Exception) {} } }.start()
+    }
+
     private fun <T> withAcc(acc: JSONObject, slot: String = "", block: (IMAPStore) -> T): T {
         val key = acc.getString("id") + slot
         synchronized(lockOf(key)) {

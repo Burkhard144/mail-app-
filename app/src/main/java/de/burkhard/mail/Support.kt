@@ -39,6 +39,18 @@ class MailApp : Application() {
         store = Store(this)
         core = MailCore(store)
         createChannels(this)
+        // Netzwechsel (WLAN ↔ Mobilfunk, Funkloch): Verbindungen sofort erneuern statt auf Zeitgrenzen zu warten
+        try {
+            val cm = getSystemService(android.net.ConnectivityManager::class.java)
+            cm.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+                private var last: android.net.Network? = null
+                override fun onAvailable(network: android.net.Network) {
+                    if (last != null && last != network) { core.resetConnections(); MailService.networkChanged() }
+                    last = network
+                }
+                override fun onLost(network: android.net.Network) { core.resetConnections() }
+            })
+        } catch (_: Exception) {}
         // Sicherheitsnetz: alle 15 Minuten nach neuen Mails sehen, falls Android den Hintergrunddienst beendet hat
         try {
             WorkManager.getInstance(this).enqueueUniquePeriodicWork("mailcheck", ExistingPeriodicWorkPolicy.KEEP,
