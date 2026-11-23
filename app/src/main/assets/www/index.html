@@ -150,6 +150,16 @@ a{color:var(--accent)}
   background:linear-gradient(180deg,rgba(255,255,255,.32),transparent 60%),var(--accent);
   background:linear-gradient(180deg,rgba(255,255,255,.3),transparent 60%),linear-gradient(180deg,color-mix(in srgb,var(--accent-hi) 66%,transparent),color-mix(in srgb,var(--accent) 66%,transparent));
   box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -3px 0 rgba(0,0,0,.14),0 14px 26px -8px var(--shadow);transition:transform .12s}
+.fab,.sbar{background:linear-gradient(180deg,rgba(255,255,255,.42),transparent 62%),linear-gradient(180deg,color-mix(in srgb,color-mix(in srgb,var(--accent-hi) 72%,#fff) 82%,transparent),color-mix(in srgb,color-mix(in srgb,var(--accent) 82%,#fff) 82%,transparent))!important}
+.fab.sfab{right:auto;left:16px}
+.sbar{position:absolute;left:16px;right:102px;bottom:22px;z-index:6;margin:0!important;height:60px;padding:0 6px 0 16px!important;border-radius:22px!important;border:1px solid rgba(255,255,255,.4)!important;color:var(--accent-fg);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -3px 0 rgba(0,0,0,.12),0 14px 26px -8px var(--shadow)!important}
+.sbar svg{color:var(--accent-fg)!important;width:20px!important;height:20px!important}
+.sbar input{color:var(--accent-fg);font-size:16px}
+.sbar input::placeholder{color:color-mix(in srgb,var(--accent-fg) 60%,transparent)}
+.sbar .sx{border:0;background:rgba(255,255,255,.28);width:44px;height:44px;border-radius:14px;display:grid;place-items:center;color:var(--accent-fg);cursor:pointer;flex:none}
+.hidden-s{display:none!important}
+#mails{padding-bottom:110px}
 .fab:active{transform:translateY(2px)}
 .fab svg{width:30px;height:30px;stroke-width:2.3}
 .toolbar select{border:1px solid var(--line);border-radius:12px;padding:8px 10px;background:var(--glass-strong);max-width:100%;min-width:0}
@@ -932,7 +942,7 @@ function renderList(){
     <div class="pane-head"><button class="btn icon back" data-act="pane" data-p="side" aria-label="Zu den Ordnern">${ic('back')}</button>
       <h2>${titleHtml()}</h2>
       <button class="btn icon" data-act="listmenu" aria-label="Auswahl und Ansicht" title="Auswahl und Ansicht">${ic('dots')}</button></div>
-    <form class="search" id="sform">${ic('search')}<input id="q" type="search" enterkeyhint="search" placeholder="Absender, Betreff oder Text suchen" value="${esc(Q)}"></form>
+    <form class="search sbar ${SOPEN||Q?'':'hidden-s'}" id="sform">${ic('search')}<input id="q" type="search" enterkeyhint="search" placeholder="Absender, Betreff oder Text" value="${esc(Q)}"><button type="button" class="sx" data-act="sclose" aria-label="Suche schließen">${ic('x')}</button></form>
     ${away?`<div class="note ok">${ic('plane')}<span>Abwesenheitsnotiz ist an${S_().away.to?' bis '+fmtDay(S_().away.to):''}.</span><button class="btn sm" data-act="awayoff">Ausschalten</button></div>`:''}
     ${(isTrash||isJunk)&&ITEMS.length&&!Q?`<div class="bar"><span class="n" style="flex:1">${isTrash?'Papierkorb endgültig leeren':'Spam in den Papierkorb'}</span><button class="btn danger" data-act="empty">${ic('trash')}${isTrash?'Leeren':'Verschieben'}</button></div>`:''}
     ${SELECTMODE?`<div class="bar"><button class="btn" data-act="selmode">Fertig</button><span class="n">${n} ausgewählt</span>
@@ -953,6 +963,7 @@ function renderList(){
         <span class="subj">${sus?'<em class="badge">Spamverdacht</em>':''}${m.ftag?`<em class="ftag">${esc(m.ftag)}</em>`:''}<span>${esc(m.subject||'(kein Betreff)')}</span></span>${VIEW==='preview'&&m.preview?`<span class="prev">${esc(m.preview)}</span>`:''}</div></div>`}).join('')
       ||(LOADING?'<div class="spin" role="status" aria-label="Lädt"></div>':`<div class="empty"><b>${Q?'Keine Treffer':isJunk?'Kein Spam':'Hier ist es leer'}</b>${Q?'Versuche einen anderen Suchbegriff.':isJunk?'Deine Spam-Ordner sind sauber.':'Neue Mails erscheinen hier automatisch.'}</div>`)}
       ${LOADING&&ITEMS.length?'<div class="spin" role="status" aria-label="Lädt weitere Konten"></div>':''}</div>
+    <button class="fab sfab ${SOPEN||Q?'hidden-s':''}" data-act="sopen" aria-label="Suchen">${ic('search')}</button>
     <button class="fab" data-act="compose" aria-label="Neue E-Mail schreiben">${ic('pen')}</button>`;
   $('sform').addEventListener('submit',e=>{e.preventDefault();Q=$('q').value.trim();loadList()});
   if(keepTop)$('mails').scrollTop=keepTop;
@@ -1036,6 +1047,7 @@ function renderRead(){
 }
 
 /* ================= Aktionen ================= */
+let SOPEN=false; // Suchleiste offen
 const REMOVED=new Map(),REMOVED_T=new Map();
 function removeItems(keys){const s=new Set(keys);const now=Date.now();keys.forEach(k=>REMOVED_T.set(k,now));ITEMS.forEach(m=>{if(s.has(keyOf(m)))REMOVED.set(keyOf(m),m)});
   try{let ch=false;Object.values(LCACHE).forEach(c=>{const n=c.items.length;c.items=c.items.filter(m=>!s.has(keyOf(m)));if(c.items.length!==n)ch=true});if(ch)localStorage.setItem('gp-lc',JSON.stringify(LCACHE))}catch(_){}ITEMS=ITEMS.filter(m=>!s.has(keyOf(m)));keys.forEach(k=>CHECK.delete(k));if(s.has(SEL)){SEL=null;CUR=null;setPane('list')}renderList();renderRead()}
@@ -2029,6 +2041,8 @@ document.addEventListener('click',async e=>{
     case 'box':V={type:'box',acc,path};Q='';SEL=null;CUR=null;renderSide();renderRead();loadList();setPane('list');break;
     case 'toggle':COLLAPSED[acc]=!COLLAPSED[acc];try{localStorage.setItem('gp-collapsed',JSON.stringify(COLLAPSED))}catch(_){}renderSide();break;
     case 'pane':setPane(t.dataset.p);break;
+    case 'sopen':SOPEN=true;renderList();setTimeout(()=>{const q=$('q');if(q)q.focus()},30);break;
+    case 'sclose':SOPEN=false;if(Q){Q='';loadList()}else renderList();break;
     case 'refresh':loadOverviews();loadList();break;
     case 'selmode':closeModal();SELECTMODE=!SELECTMODE;if(!SELECTMODE)CHECK.clear();renderList();break;
     case 'ck':e.stopPropagation();t.checked?CHECK.add(t.dataset.k):CHECK.delete(t.dataset.k);renderList();break;
