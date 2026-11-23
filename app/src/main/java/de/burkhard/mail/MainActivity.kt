@@ -56,6 +56,8 @@ class MainActivity : AppCompatActivity() {
             mediaPlaybackRequiresUserGesture = true
             setSupportMultipleWindows(false)
             textZoom = (resources.configuration.fontScale * 100).toInt().coerceIn(85, 200)
+            // Bilder in Mails, die noch über unverschlüsseltes http:// kommen, trotzdem anzeigen (nur Bilder, keine Skripte)
+            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
         }
         web.addJavascriptInterface(Bridge(this), "MailBridge")
         web.webViewClient = object : WebViewClient() {

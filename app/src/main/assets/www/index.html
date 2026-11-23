@@ -972,6 +972,7 @@ function moveOptions(acc,cur){
 }
 function frameDoc(html,remote){
   const ext=remote?' https: http:':'';
+  if(remote)html=String(html).replace(/(<img\b[^>]*?\s(?:src|srcset)\s*=\s*["']?)http:\/\//gi,'$1https://').replace(/(\sbackground\s*=\s*["']?)http:\/\//gi,'$1https://').replace(/url\((\s*["']?)http:\/\//gi,'url($1https://');
   return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: cid:${ext}; style-src 'unsafe-inline'${ext}; font-src data:${ext}"><base target="_blank"><style>html,body{margin:0;background:#fff;color:#111;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important}body{padding:14px;font:15px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap}</style></head><body>${html}</body></html>`;
 }
 function renderRead(){
@@ -1352,7 +1353,9 @@ function cleanLinks(html){let n=0;const out=html.replace(/href="([^"]+)"/gi,(all
 function linkWarnings(html){const out=[];try{const doc=new DOMParser().parseFromString(html,'text/html');
   doc.querySelectorAll('a[href]').forEach(a=>{const href=a.getAttribute('href');let host='';try{host=new URL(href).hostname.replace(/^www\./,'')}catch(e){return}
     const txt=a.textContent.trim();const m=txt.match(/([a-z0-9-]+\.)+[a-z]{2,}/i);
-    if(m){const shown=m[0].toLowerCase().replace(/^www\./,'');if(!host.endsWith(shown.split('/')[0])&&!shown.endsWith(host))out.push({shown:txt,host})}
+    if(m){const shown=m[0].toLowerCase().replace(/^www\./,'');
+      const brand=h=>{const p=h.split('.');const two=/^(co|com|org|net|gov|ac)\.[a-z]{2}$/.test(p.slice(-2).join('.'));return p[p.length-(two?3:2)]||h};
+      if(!host.endsWith(shown.split('/')[0])&&!shown.endsWith(host)&&brand(host)!==brand(shown.split('/')[0]))out.push({shown:txt,host})}
     else if(/^http:/i.test(href))out.push({shown:txt||href,host,plain:true})})}catch(e){}return out}
 function openLink(href,text){
   let host='';try{host=new URL(href).hostname}catch(e){return}
