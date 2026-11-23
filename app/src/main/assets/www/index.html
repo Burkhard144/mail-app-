@@ -404,6 +404,7 @@ details.adv summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--mu
 .note.ok{display:flex;align-items:center;gap:8px;background:var(--ok-bg);color:var(--fg)}
 .note.ok span{flex:1}
 .note.ok svg{width:18px;height:18px;color:var(--ok);flex:none}
+.btn.trust-on{color:var(--ok)}
 .warnbox{overflow-wrap:anywhere;min-width:0;display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding:10px 12px;border-radius:14px;background:var(--bad-bg);font-size:13px;line-height:1.5;border:1px solid rgba(191,61,54,.25)}
 .warnbox svg{width:20px;height:20px;color:var(--danger);flex:none;margin-top:1px}
 .unsub{display:flex;align-items:center;gap:10px;margin-top:12px;padding:8px 10px 8px 12px;border-radius:14px;background:var(--sel);font-size:13px}
@@ -990,7 +991,8 @@ function renderRead(){
   const remote=role!=='junk'&&((S_().images||'always')==='always'||LOADREMOTE);
   let html=d.html,cleaned=0;
   if(html&&P>=3&&role!=='junk'){const c=cleanLinks(html);html=c.html;cleaned=c.removed}
-  const warns=html&&P>=2&&role!=='junk'?linkWarnings(html):[];
+  const sAddr=d.fromAddr||m.fromAddr||'';const trusted=isTrusted(sAddr);
+  const warns=html&&P>=2&&role!=='junk'&&!trusted?linkWarnings(html,sAddr):[];
   const incoming=role!=='sent'&&role!=='drafts'&&d.fromAddr;const known=incoming&&findContact(d.fromAddr);
   el.innerHTML=`
     <div class="toolbar"><button class="btn icon back" data-act="pane" data-p="list" aria-label="Zurück zur Liste">${ic('back')}</button>
@@ -1007,11 +1009,11 @@ function renderRead(){
         <div class="meta-txt"><div class="who"><b>${esc(d.from)}</b></div><div class="muted">${esc(d.fromAddr)}</div>
         <div class="muted">An: ${esc(d.to)}${d.cc?' · Cc: '+esc(d.cc):''}</div>
         <div class="muted">${new Date(d.date).toLocaleString('de-DE',{weekday:'short',day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
-        <div class="who-act">${incoming?`<button class="btn sm addc" data-act="addcontact">${ic(known?'person':'personadd')}<span>${known?'Im Adressbuch':'Ins Adressbuch'}</span></button>${role!=='junk'&&!isTrash?`<button class="btn sm addc danger" data-act="block1">${ic('block')}<span>Sperren</span></button>`:''}`:''}</div></div>
+        <div class="who-act">${incoming?`<button class="btn sm addc" data-act="addcontact">${ic(known?'person':'personadd')}<span>${known?'Im Adressbuch':'Ins Adressbuch'}</span></button>${role!=='junk'&&!isTrash?`<button class="btn sm addc danger" data-act="block1">${ic('block')}<span>Sperren</span></button>`:''}${role!=='junk'?(trusted?`<button class="btn sm addc trust-on" data-act="untrust">${ic('shield')}<span>Vertraut ✓</span></button>`:`<button class="btn sm addc" data-act="trustsender">${ic('shield')}<span>Vertrauen</span></button>`):''}`:''}</div></div>
         <span class="chip"><span class="dot" style="background:${a.color}"></span>${esc(a.email||'')}</span></div>
       <div class="aibox" id="aibox" hidden></div>
       ${P>=2&&(d.reasons&&d.reasons.length&&!d.allowed&&(d.score>=2||role==='junk'))?`<div class="spambox"><b>${d.score>=thr?'Spamverdacht':'Hinweise'}</b> (Wert ${d.score>=99?'Sperrliste':d.score}):<ul>${d.reasons.map(r=>`<li>${esc(r)}</li>`).join('')}</ul></div>`:''}
-      ${warns.length?`<div class="warnbox">${ic('block')}<div><b>Vorsicht, verdächtiger Link</b><br>${warns.slice(0,3).map(w=>w.plain?`„${esc(w.shown)}“ führt ungeschützt (http) zu <b>${esc(w.host)}</b>`:`Angezeigt: „${esc(w.shown)}“ – tatsächliches Ziel: <b>${esc(w.host)}</b>`).join('<br>')}</div></div>`:''}
+      ${warns.length?`<div class="warnbox">${ic('block')}<div><b>Vorsicht, verdächtiger Link</b><br>${warns.slice(0,3).map(w=>w.plain?`„${esc(w.shown)}“ führt ungeschützt (http) zu <b>${esc(w.host)}</b>`:`Angezeigt: „${esc(w.shown)}“ – tatsächliches Ziel: <b>${esc(w.host)}</b>`).join('<br>')}<br><button class="btn sm" data-act="trustsender" style="margin-top:8px">${ic('shield')}Absender ist vertrauenswürdig</button></div></div>`:''}
       ${role==='junk'?`<div class="spambox">Diese Mail liegt im Spam-Ordner. Bilder und Links bleiben zu deiner Sicherheit blockiert.</div>`:''}
       ${d.unsubscribe&&role!=='junk'?`<div class="unsub">${ic('unsub')}<span>Newsletter von ${esc(d.from)}</span><button class="btn sm" data-act="unsub">Abbestellen</button></div>`:''}
       ${hasRemote&&!remote&&role!=='junk'?`<div class="imgnote">Externe Bilder sind blockiert, damit der Absender nicht sieht, wann du liest. <button class="btn" data-act="loadimg">Bilder laden</button></div>`:''}
@@ -1350,12 +1352,26 @@ function openAttachment(i){
 function cleanLinks(html){let n=0;const out=html.replace(/href="([^"]+)"/gi,(all,u)=>{try{const x=new URL(u.replace(/&amp;/g,'&'));const before=[...x.searchParams.keys()].length;
   [...x.searchParams.keys()].forEach(k=>{if(/^(utm_|mc_|fbclid|gclid|dclid|msclkid|yclid|_hs|mkt_tok|uid$)/i.test(k))x.searchParams.delete(k)});
   const after=[...x.searchParams.keys()].length;if(after<before){n+=before-after;return `href="${x.toString().replace(/&/g,'&amp;')}"`}}catch(e){}return all});return {html:out,removed:n}}
-function linkWarnings(html){const out=[];try{const doc=new DOMParser().parseFromString(html,'text/html');
-  doc.querySelectorAll('a[href]').forEach(a=>{const href=a.getAttribute('href');let host='';try{host=new URL(href).hostname.replace(/^www\./,'')}catch(e){return}
-    const txt=a.textContent.trim();const m=txt.match(/([a-z0-9-]+\.)+[a-z]{2,}/i);
-    if(m){const shown=m[0].toLowerCase().replace(/^www\./,'');
-      const brand=h=>{const p=h.split('.');const two=/^(co|com|org|net|gov|ac)\.[a-z]{2}$/.test(p.slice(-2).join('.'));return p[p.length-(two?3:2)]||h};
-      if(!host.endsWith(shown.split('/')[0])&&!shown.endsWith(host)&&brand(host)!==brand(shown.split('/')[0]))out.push({shown:txt,host})}})}catch(e){}return out}
+function trustKey(addr){const a=String(addr||'').toLowerCase();const dom=a.split('@')[1]||'';return !dom||FREEMAIL.has(dom)?a:'@'+dom}
+function isTrusted(addr){const a=String(addr||'').toLowerCase();if(!a)return false;const dom='@'+(a.split('@')[1]||'');return ((CFG.rules&&CFG.rules.allow)||[]).some(x=>{x=String(x).toLowerCase();return x===a||x===dom})}
+async function setTrust(on){if(!CUR||!CUR.d)return;const addr=String(CUR.d.fromAddr||CUR.m.fromAddr||'').toLowerCase();if(!addr)return;
+  const k=trustKey(addr),dom='@'+(addr.split('@')[1]||'');const not=x=>{x=String(x).toLowerCase();return x!==addr&&x!==dom};
+  const allow=(CFG.rules.allow||[]).filter(not);let block=CFG.rules.block||[];if(on){allow.push(k);block=block.filter(not)}
+  CFG.rules={...CFG.rules,allow,block};
+  try{await api('saveRules',{rules:CFG.rules})}catch(e){toast(e.message);return}
+  ITEMS.forEach(x=>{const fa=String(x.fromAddr||'').toLowerCase();if(fa===addr||fa.endsWith(dom))x.allowed=on});CUR.d.allowed=on;CUR.m.allowed=on;
+  renderRead();renderList();toast(on?(k.startsWith('@')?'Alle Mails von '+k.slice(1)+' gelten jetzt als vertrauenswürdig':addr+' gilt jetzt als vertrauenswürdig'):'Vertrauen aufgehoben')}
+function linkWarnings(html,sender){const out=[];try{const doc=new DOMParser().parseFromString(html,'text/html');doc.querySelectorAll('style,script,head,title').forEach(x=>x.remove());
+  const brand=h=>{const p=String(h).toLowerCase().split('.');const two=/^(co|com|org|net|gov|ac)\.[a-z]{2}$/.test(p.slice(-2).join('.'));return p[p.length-(two?3:2)]||h};
+  const sb=sender?brand(String(sender).split('@')[1]||''):'';
+  doc.querySelectorAll('a[href]').forEach(a=>{const href=a.getAttribute('href');let host='';try{host=new URL(href).hostname.replace(/^www\./,'').toLowerCase()}catch(e){return}
+    const txt=a.textContent.replace(/\s+/g,' ').trim();if(!txt||txt.length>120)return;
+    const m=txt.match(/(?:^|[\s(„"'])((?:https?:\/\/)?(?:www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,})(?=$|[\s\/)“"',.:;!?])/i);if(!m)return;
+    const shown=m[1].toLowerCase().replace(/^https?:\/\//,'').replace(/^www\./,'').split('/')[0];
+    if(/^\d/.test(shown)||host.endsWith(shown)||shown.endsWith(host)||brand(host)===brand(shown))return;
+    /* Link führt zur Firma des Absenders selbst (z. B. eBay-Händlername → ebay.de) – außer der Text gibt sich als vollständige Internetadresse aus (typisch für Betrug) */
+    if(sb&&brand(host)===sb&&!/^(https?:\/\/|www\.)/i.test(m[1])&&!/\//.test(txt))return;
+    out.push({shown:txt,host})})}catch(e){}return out}
 function openLink(href,text){
   let host='';try{host=new URL(href).hostname}catch(e){return}
   const P=protLevel();const warn=linkWarnings(`<a href="${esc(href)}">${esc(text||'')}</a>`).length>0;
@@ -1978,6 +1994,9 @@ document.addEventListener('click',async e=>{
     case 'att':openAttachment(+t.dataset.i);break;
     case 'chooser':closeModal();toast(t.dataset.n==='save'?'In der App: Datei liegt danach in „Downloads“.':'In der App öffnet sich jetzt „'+t.dataset.n+'“.');break;
     case 'unsub':unsubDialog();break;
+    case 'trustsender':setTrust(true);break;
+    case 'untrust':modal(`<h3>Vertrauen aufheben?</h3><p class="hint">Mails von diesem Absender werden dann wieder auf verdächtige Links und Spam geprüft.</p><div class="actions"><button class="btn" data-act="close">Abbrechen</button><button class="btn dangerfill" data-act="untrustgo">Aufheben</button></div>`,'sheet');break;
+    case 'untrustgo':closeModal();setTrust(false);break;
     case 'block1':blockDialog(SEL?[SEL]:[]);break;
     case 'replyall':replyAll();break;
     case 'more1':if(SEL)ctxMenu(SEL);break;
