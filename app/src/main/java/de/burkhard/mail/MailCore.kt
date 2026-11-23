@@ -273,9 +273,12 @@ class MailCore(private val store: Store) {
         val cfg = store.load()
         val rules = cfg.getJSONObject("rules")
         val settings = cfg.getJSONObject("settings")
-        val fs = folders(acc)
-        val path = pathIn ?: byRole(fs, roleIn ?: "inbox") ?: return JSONObject().put("items", JSONArray()).put("total", 0).put("moved", 0).put("path", JSONObject.NULL)
-        val role = roleOf(fs, path)
+        // Posteingang direkt öffnen – ohne vorher die komplette Ordnerliste zu holen (bei Gmail mit vielen Labels dauert das Sekunden).
+        // Die Ordnerliste wird nur gebraucht, wenn sie schon im Speicher liegt oder ein anderer Ordner gewünscht ist.
+        val inboxFast = pathIn == null && (roleIn ?: "inbox") == "inbox" || pathIn.equals("INBOX", true)
+        val fsLazy = lazy { folders(acc) }
+        val path = if (inboxFast) "INBOX" else pathIn ?: byRole(fsLazy.value, roleIn ?: "inbox") ?: return JSONObject().put("items", JSONArray()).put("total", 0).put("moved", 0).put("path", JSONObject.NULL)
+        val role = if (inboxFast) "inbox" else roleOf(fsLazy.value, path)
         val items = mutableListOf<JSONObject>()
         val toJunk = mutableListOf<Long>()
         var total = 0
@@ -328,7 +331,7 @@ class MailCore(private val store: Store) {
             } finally { try { f.close(false) } catch (_: Exception) {} }
         }
         var moved = 0
-        val junk = byRole(fs, "junk")
+        val junk = if (toJunk.isNotEmpty()) byRole(fsLazy.value, "junk") else null
         if (toJunk.isNotEmpty() && junk != null && junk != path) {
             try { moveUids(acc, path, toJunk, junk); moved = toJunk.size } catch (_: Exception) {}
         }
