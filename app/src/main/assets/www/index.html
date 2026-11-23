@@ -404,7 +404,7 @@ details.adv summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--mu
 .note.ok{display:flex;align-items:center;gap:8px;background:var(--ok-bg);color:var(--fg)}
 .note.ok span{flex:1}
 .note.ok svg{width:18px;height:18px;color:var(--ok);flex:none}
-.warnbox{display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding:10px 12px;border-radius:14px;background:var(--bad-bg);font-size:13px;line-height:1.5;border:1px solid rgba(191,61,54,.25)}
+.warnbox{overflow-wrap:anywhere;min-width:0;display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding:10px 12px;border-radius:14px;background:var(--bad-bg);font-size:13px;line-height:1.5;border:1px solid rgba(191,61,54,.25)}
 .warnbox svg{width:20px;height:20px;color:var(--danger);flex:none;margin-top:1px}
 .unsub{display:flex;align-items:center;gap:10px;margin-top:12px;padding:8px 10px 8px 12px;border-radius:14px;background:var(--sel);font-size:13px}
 .unsub span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1355,8 +1355,7 @@ function linkWarnings(html){const out=[];try{const doc=new DOMParser().parseFrom
     const txt=a.textContent.trim();const m=txt.match(/([a-z0-9-]+\.)+[a-z]{2,}/i);
     if(m){const shown=m[0].toLowerCase().replace(/^www\./,'');
       const brand=h=>{const p=h.split('.');const two=/^(co|com|org|net|gov|ac)\.[a-z]{2}$/.test(p.slice(-2).join('.'));return p[p.length-(two?3:2)]||h};
-      if(!host.endsWith(shown.split('/')[0])&&!shown.endsWith(host)&&brand(host)!==brand(shown.split('/')[0]))out.push({shown:txt,host})}
-    else if(/^http:/i.test(href))out.push({shown:txt||href,host,plain:true})})}catch(e){}return out}
+      if(!host.endsWith(shown.split('/')[0])&&!shown.endsWith(host)&&brand(host)!==brand(shown.split('/')[0]))out.push({shown:txt,host})}})}catch(e){}return out}
 function openLink(href,text){
   let host='';try{host=new URL(href).hostname}catch(e){return}
   const P=protLevel();const warn=linkWarnings(`<a href="${esc(href)}">${esc(text||'')}</a>`).length>0;
