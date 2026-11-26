@@ -644,6 +644,12 @@ class MailCore(private val store: Store) {
         m.sentDate = Date()
         d.optString("inReplyTo").takeIf { it.isNotBlank() }?.let { m.setHeader("In-Reply-To", it) }
         d.optString("references").takeIf { it.isNotBlank() }?.let { m.setHeader("References", it) }
+        // Lesebestätigung anfordern (das Mailprogramm des Empfängers fragt dann, ob es eine Bestätigung schicken soll)
+        if (d.optBoolean("receipt")) {
+            val me = InternetAddress(acc.optString("email"), acc.optString("name"), "UTF-8").toString()
+            m.setHeader("Disposition-Notification-To", me)
+            m.setHeader("Return-Receipt-To", me)
+        }
         val text = d.optString("text")
         val html = d.optString("html")
         val atts = d.optJSONArray("attachments")

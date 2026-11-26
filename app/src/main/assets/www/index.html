@@ -671,6 +671,8 @@ html.kb-open .fab{display:none}
     padding:calc(12px + env(safe-area-inset-top,0px)) 14px calc(12px + env(safe-area-inset-bottom,0px))!important}
   html.kb-open .modal.compose{max-height:none!important}
 }
+.c-rr{margin-top:8px;padding:6px 2px}
+.c-rr .sw-txt b{font-weight:500;font-size:15px}
 </style>
 
 <div id="root"></div>
@@ -1622,6 +1624,7 @@ function compose(pre={}){
     <div class="aibox" id="c-ai" hidden></div>
     <div id="c-body" class="editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Nachricht">${body}</div>
     <div class="c-atts" id="c-atts"></div>
+    <label class="sw c-rr"><input type="checkbox" id="c-rr" ${(pre.receipt!=null?pre.receipt:S_().readReceipt)?'checked':''}><span class="sw-ui" aria-hidden="true"></span><span class="sw-txt"><b>Lesebestätigung anfordern</b></span></label>
     <input type="file" id="c-file" multiple hidden>
     <p class="errtxt" id="c-err" hidden></p>
     <div class="fmt-sizes c-aimenu" id="c-aimenu" hidden>
@@ -1695,7 +1698,7 @@ function compose(pre={}){
     const clean=v=>v.trim().replace(/,\s*$/,'');
     const payload={acc:$('c-from').value,to:clean($('c-to').value),cc:clean($('c-cc').value),bcc:clean($('c-bcc').value),subject:$('c-subj').value,text:ed.innerText.trim(),html:ed.innerHTML.trim(),
         inReplyTo:pre.inReplyTo,references:pre.references,reply:!!pre.replyUid,replyPath:pre.replyPath,replyUid:pre.replyUid,
-        attachments:ATTS.filter(a=>a.id&&!a.loading).map(a=>({id:a.id,name:a.name,mime:a.mime,size:a.size}))};
+        attachments:ATTS.filter(a=>a.id&&!a.loading).map(a=>({id:a.id,name:a.name,mime:a.mime,size:a.size})),receipt:!!($('c-rr')&&$('c-rr').checked)};
     if(ATTS.some(a=>a.loading))return showErr('c-err','Die Anhänge werden noch geladen. Bitte einen Moment warten.');
     if(kind==='send'&&!/[^\s@]+@[^\s@]+\.[^\s@]+/.test(payload.to+payload.cc+payload.bcc))return showErr('c-err','Bitte mindestens einen Empfänger eintragen.');
     const delay=Number(S_().undoDelay||0);
@@ -1709,7 +1712,7 @@ const fmtDelay=s=>s>=60?`${Math.round(s/60)} Minute${s>=120?'n':''}`:`${s} Sekun
 async function queueSend(payload,delay,pre){try{const r=await api('queue',{payload,delay});OUTBOX.push({id:r.id,payload,pre,sendAt:r.sendAt});renderSide();
   toastAct(`Wird in ${fmtDelay(delay)} gesendet`,'Zurückholen',()=>recall(r.id),10000,'Jetzt senden',()=>sendNow(r.id));obTick()}catch(e){toast(e.message)}}
 async function recall(id){const o=OUTBOX.find(x=>x.id===id)||{};OUTBOX=OUTBOX.filter(x=>x.id!==id);renderSide();if(V.type==='outbox')renderList();
-  try{const r=await api('recall',{id});const p=r.payload;compose({...(o.pre||{}),title:'Zurückgeholt',acc:p.acc,to:p.to,cc:p.cc,bcc:p.bcc,subject:p.subject,atts:p.attachments||[],fwdAtts:[]});const ed=$('c-body');if(ed)ed.innerHTML=p.html;toast('Mail zurückgeholt. Du kannst sie jetzt ändern.')}catch(e){toast(e.message)}}
+  try{const r=await api('recall',{id});const p=r.payload;compose({...(o.pre||{}),title:'Zurückgeholt',acc:p.acc,to:p.to,cc:p.cc,bcc:p.bcc,subject:p.subject,atts:p.attachments||[],fwdAtts:[],receipt:p.receipt});const ed=$('c-body');if(ed)ed.innerHTML=p.html;toast('Mail zurückgeholt. Du kannst sie jetzt ändern.')}catch(e){toast(e.message)}}
 async function sendNow(id){OUTBOX=OUTBOX.filter(x=>x.id!==id);renderSide();if(V.type==='outbox')renderList();toast('Wird gesendet …');try{const r=await api('sendNow',{id});toast(r&&r.already?'Ist schon unterwegs':'Gesendet ✓');loadOverviews()}catch(e){toast(e.message)}}
 let obTimer=null;
 function obTick(){clearTimeout(obTimer);if(!OUTBOX.length){if(V.type==='outbox')renderList();return}
@@ -1873,6 +1876,7 @@ function renderSettings(){
       <button class="btn" data-act="addacc">${ic('plus')}Konto hinzufügen</button>`}
   if(sec==='send'){h=`<div class="sgroup"><div class="field"><label for="s-from">Standard-Absender für neue Mails aus „Alle Posteingänge“</label><select id="s-from">${CFG.accounts.map(a=>`<option value="${a.id}" ${a.id===s.defaultFrom?'selected':''}>${esc(a.name)} – ${esc(a.email)}</option>`).join('')}</select></div>
       <p class="hint" style="margin:0">Antworten gehen immer von dem Konto raus, an das die Mail ging.</p></div>
+      <div class="sgroup">${swH('s-rr',!!s.readReceipt,'Lesebestätigung immer anfordern','Voreinstellung für neue Mails. Beim Schreiben kannst du es für jede Mail einzeln ein- oder ausschalten. Ob eine Bestätigung zurückkommt, entscheidet der Empfänger.')}</div>
       <div class="sgroup"><span class="fl">Senden zurückholen</span>${segH('s-undo',[[0,'Aus'],[30,'30 s'],[60,'1 Min'],[120,'2 Min'],[300,'5 Min']],Number(s.undoDelay||0))}
       <p class="hint">Mail wartet so lange, bevor sie wirklich verschickt. In der Zeit kannst du sie im Postausgang zurückholen und ändern. Nach dem Versand geht das nicht mehr.</p></div>`}
   if(sec==='away'){const a=s.away||{};h=`<div class="sgroup">${swH('a-on',!!a.on,'Abwesenheitsnotiz einschalten','')}
@@ -1931,6 +1935,7 @@ function renderSettings(){
   if($('sig-new'))$('sig-new').onclick=async()=>{const id='s'+Date.now().toString(36);await saveSet({sigs:[...sigList(),{id,name:'Neue Signatur',html:'Viele Grüße'}]});renderSettingsList();renderRead();
     setTimeout(()=>{const n=$('sn-'+id);if(n){n.scrollIntoView({block:'start',behavior:'smooth'});n.select()}},60);toast('Neue Signatur angelegt – Name und Text anpassen, dann speichern')};
   CFG.accounts.forEach(a=>{const s=$('sd-'+a.id);if(s)s.addEventListener('change',()=>setAndRefresh({sigDefault:{...(S_().sigDefault||{}),[a.id]:s.value}},'Standard-Signatur für '+a.name+' gespeichert'))});
+  onSw('s-rr',v=>setAndRefresh({readReceipt:v},v?'Lesebestätigung wird standardmäßig angefordert':'Lesebestätigung standardmäßig aus'));
   const sf=$('s-from');if(sf)sf.addEventListener('change',()=>setAndRefresh({defaultFrom:sf.value},'Standard-Absender gespeichert'));
   onSeg('s-undo',v=>setAndRefresh({undoDelay:Number(v)},Number(v)?'Mails warten jetzt '+fmtDelay(Number(v))+' vor dem Versand':'Mails gehen sofort raus'));
   if($('a-save'))$('a-save').onclick=()=>{const a={on:$('a-on').checked,from:$('a-from').dataset.v||'',to:$('a-to').dataset.v||'',subject:$('a-subj').value,text:$('a-text').innerHTML.trim(),
