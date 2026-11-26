@@ -344,7 +344,7 @@ object Overlay {
         actions.addView(btn("Schließen", false) { close(ctx) }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginEnd = dp(8) })
         actions.addView(btn("Öffnen", true) {
             close(ctx)
-            ctx.startActivity(Intent(ctx, MainActivity::class.java).putExtra("openMail", n.toString()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+            openApp(ctx, n)
         }, LinearLayout.LayoutParams(0, dp(48), 1f))
         box.addView(actions)
         val lp = WindowManager.LayoutParams(
@@ -355,6 +355,24 @@ object Overlay {
         ).apply { gravity = Gravity.TOP; y = dp(40); horizontalMargin = 0.03f }
         val frame = LinearLayout(ctx).apply { setPadding(dp(10), 0, dp(10), 0); addView(box, LinearLayout.LayoutParams(-1, -2)) }
         try { wm.addView(frame, lp); view = frame } catch (_: Exception) {}
+    }
+
+    /**
+     * App mit der Mail öffnen. Android (und HyperOS) blockieren direktes Starten aus dem Hintergrund;
+     * über einen PendingIntent mit ausdrücklicher Erlaubnis klappt es (Mail darf über anderen Apps anzeigen).
+     */
+    fun openApp(ctx: Context, n: JSONObject) {
+        val i = Intent(ctx, MainActivity::class.java).putExtra("openMail", n.toString())
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        val pi = PendingIntent.getActivity(ctx, (System.currentTimeMillis() % 100000).toInt(), i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        try {
+            if (Build.VERSION.SDK_INT >= 34) {
+                val o = android.app.ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
+                pi.send(ctx, 0, null, null, null, null, o.toBundle())
+            } else pi.send()
+        } catch (_: Exception) {
+            try { ctx.startActivity(i) } catch (_: Exception) {}
+        }
     }
 
     fun close(ctx: Context) {

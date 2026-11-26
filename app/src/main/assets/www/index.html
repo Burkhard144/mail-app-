@@ -1740,7 +1740,10 @@ function notifyPopup(n){
   document.body.appendChild(el);
 }
 function closeNotif(){document.querySelectorAll('.notif').forEach(x=>x.remove())}
-async function openFromNotif(){const n=NOTIF;closeNotif();if(!n)return;V={type:'uni',role:'inbox'};Q='';renderSide();await loadList();const k=n.acc+'\u0001'+n.path+'\u0001'+n.uid;if(ITEMS.find(x=>keyOf(x)===k))openMail(k)}
+async function openFromNotif(){const n=NOTIF;closeNotif();if(!n)return;V={type:'uni',role:'inbox'};Q='';renderSide();setPane('list');await loadList();const k=n.acc+'\u0001'+n.path+'\u0001'+n.uid;
+  /* Steht die Mail (noch) nicht in der Liste, trotzdem direkt öffnen */
+  if(!ITEMS.find(x=>keyOf(x)===k)){const a=accOf(n.acc);if(!a)return;ITEMS.unshift({acc:n.acc,path:n.path||'INBOX',role:'inbox',uid:n.uid,from:n.from||'',fromAddr:n.fromAddr||'',subject:n.subject||'',date:Date.now(),seen:false,score:0});renderList()}
+  openMail(k)}
 function copyCode(btn){const code=btn.dataset.code;try{MailBridge.copy(code)}catch(e){}btn.innerHTML=`${ic('check')}Kopiert`;toast('Code '+code+' kopiert')}
 function selectCode(){const el=$('n-codev');if(!el)return;const r=document.createRange();r.selectNodeContents(el);const s=getSelection();s.removeAllRanges();s.addRange(r);toast('Code markiert – jetzt über das Menü kopieren')}
 async function demoIncoming(){try{const n=await api('inject');loadOverviews();if(V.type==='uni'||V.type==='box')loadList(true);notifyPopup(n)}catch(e){}}
@@ -2151,7 +2154,13 @@ window.__back=()=>{const p=document.querySelector('.pop-back');if(p){p.remove();
   if(V.type!=='uni'||V.role!=='inbox'){V={type:'uni',role:'inbox'};Q='';SEL=null;CUR=null;renderSide();renderRead();loadList();return true}
   return false};
 window.__newMail=n=>{notifyPopup(n);loadOverviews();if(V.type==='uni'||V.type==='box')loadList(true)};
-window.__openMail=async n=>{NOTIF=n;if(!UNLOCKED){window.__pendingOpen=n;return}await openFromNotif()};
+window.__openMail=async n=>{NOTIF=n;
+  /* Ist Fingerabdruck/PIN ausgeschaltet, gilt die App als entsperrt (vorher blieb die Mail hier hängen) */
+  const lockOff=()=>CFG&&CFG.settings&&CFG.settings.lock&&CFG.settings.lock.on===false;
+  for(let i=0;i<60&&!(CFG&&CFG.__loaded);i++)await new Promise(r=>setTimeout(r,150)); // App startet noch
+  if(!UNLOCKED&&!lockOff()){window.__pendingOpen=n;return}
+  for(let i=0;i<40&&!$('app');i++)await new Promise(r=>setTimeout(r,150));
+  await openFromNotif()};
 /* Neue Mail von außen (mailto, „Teilen“, Ziehen): wartet bei Bedarf, bis die App entsperrt und geladen ist */
 let MAILREADY=false;
 const canCompose=()=>MAILREADY&&(UNLOCKED||!!(CFG.settings&&CFG.settings.lock&&CFG.settings.lock.on===false))&&!!(CFG.accounts&&CFG.accounts.length);
