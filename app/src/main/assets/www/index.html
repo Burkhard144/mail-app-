@@ -651,6 +651,18 @@ html.kb-open .fab{display:none}
   .toast{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--modal-solid)}
   body::after{position:absolute}
 }
+@media (max-width:880px){
+  :root{padding-top:0!important;padding-bottom:0!important}
+  body{padding:0!important;background:var(--pane-solid)}
+  body::after{display:none}
+  .app{gap:0}
+  .pane{border-radius:0!important;border:0!important;box-shadow:none!important;background:var(--pane-solid)!important;
+    padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+    padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+}
+:root{--pane-solid:#eef6f7}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--pane-solid:#12242b}}
+:root[data-theme="dark"]{--pane-solid:#12242b}
 </style>
 
 <div id="root"></div>
@@ -1214,7 +1226,10 @@ AI=Object.assign(async(prompt,opts={})=>{const r=await api('ai',{prompt,tier:opt
 /* ---- Hell / Dunkel ---- */
 const HOST_THEME=document.documentElement.dataset.theme||'';
 let THEME='auto';try{THEME=localStorage.getItem('gp-theme')||'auto'}catch(e){}
-function applyTheme(){const r=document.documentElement;if(THEME==='auto'){if(HOST_THEME)r.dataset.theme=HOST_THEME;else delete r.dataset.theme}else r.dataset.theme=THEME}
+function applyTheme(){const r=document.documentElement;if(THEME==='auto'){if(HOST_THEME)r.dataset.theme=HOST_THEME;else delete r.dataset.theme}else r.dataset.theme=THEME;
+  /* Status- und Navigationsleiste von Android in derselben Farbe wie die App */
+  try{if(window.MailBridge&&MailBridge.setBars){const dk=isDark();MailBridge.setBars(dk?'#12242B':'#EEF6F7',dk)}}catch(e){}}
+try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(THEME==='auto')applyTheme()})}catch(e){}
 function isDark(){const t=document.documentElement.dataset.theme;return t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches}
 function setTheme(t){THEME=t;try{localStorage.setItem('gp-theme',t)}catch(e){}applyTheme();renderSide();if(V.type==='settings')renderRead()}
 function toggleTheme(){setTheme(isDark()?'light':'dark')}

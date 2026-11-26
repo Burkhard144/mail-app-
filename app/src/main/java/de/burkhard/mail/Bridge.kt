@@ -59,6 +59,19 @@ class Bridge(private val act: MainActivity) {
     }
     @JavascriptInterface fun isApp(): Boolean = true
 
+    /** Status- und Navigationsleiste von Android in der Farbe der App (hell/dunkel). */
+    @JavascriptInterface fun setBars(color: String, dark: Boolean) {
+        act.runOnUiThread {
+            try {
+                val c = android.graphics.Color.parseColor(color)
+                @Suppress("DEPRECATION") run { act.window.statusBarColor = c; act.window.navigationBarColor = c }
+                val ctl = androidx.core.view.WindowInsetsControllerCompat(act.window, act.window.decorView)
+                ctl.isAppearanceLightStatusBars = !dark
+                ctl.isAppearanceLightNavigationBars = !dark
+            } catch (_: Exception) {}
+        }
+    }
+
     private fun ok() = JSONObject().put("ok", true)
 
     private fun handle(b: JSONObject): JSONObject {
