@@ -663,6 +663,14 @@ html.kb-open .fab{display:none}
 :root{--pane-solid:#eef6f7}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--pane-solid:#12242b}}
 :root[data-theme="dark"]{--pane-solid:#12242b}
+/* Neue Mail auf dem Handy: ganzer Bildschirm wie die Liste, nur die Eingabefelder bleiben runde Glasfelder */
+@media (max-width:880px){
+  .overlay.compose{padding:0!important;background:var(--pane-solid)!important;place-items:stretch}
+  .modal.compose{width:100%!important;max-width:none!important;height:100%!important;max-height:none!important;border-radius:0!important;border:0!important;
+    box-shadow:none!important;background:var(--pane-solid)!important;
+    padding:calc(12px + env(safe-area-inset-top,0px)) 14px calc(12px + env(safe-area-inset-bottom,0px))!important}
+  html.kb-open .modal.compose{max-height:none!important}
+}
 </style>
 
 <div id="root"></div>
