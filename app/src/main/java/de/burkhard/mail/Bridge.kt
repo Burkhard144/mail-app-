@@ -38,13 +38,19 @@ class Bridge(private val act: MainActivity) {
     @JavascriptInterface
     fun call(id: String, json: String) {
         scope.launch {
+            val t0 = android.os.SystemClock.elapsedRealtime()
+            var action = ""; var who = ""
             val res = try {
                 val b = JSONObject(json)
+                action = b.optString("action")
+                who = b.optString("acc").takeIf { it.isNotBlank() }?.let { id -> try { store.account(id).let { a -> a.optString("name").ifBlank { a.optString("email") } } } catch (_: Exception) { "" } } ?: ""
                 true to handle(b)
             } catch (e: Throwable) {
                 val msg = (e as? UserError)?.message ?: core.friendly(e, null).message ?: "Fehler"
                 false to JSONObject().put("error", msg)
             }
+            val ms = android.os.SystemClock.elapsedRealtime() - t0
+            if (action in setOf("list", "read", "prefetch", "overview", "previews", "send", "sendNow", "attachment", "bulk") ) Diag.timing(action, who, ms, res.first)
             act.reply(id, res.first, res.second)
         }
     }
@@ -147,7 +153,7 @@ class Bridge(private val act: MainActivity) {
             "list" -> return core.list(store.account(b.getString("acc")), b.optString("path").takeIf { it.isNotBlank() && it != "null" },
                 b.optString("role").takeIf { it.isNotBlank() && it != "null" }, b.optString("q"), minOf(200, b.optInt("limit", 50)), b.optBoolean("preview"))
             "read" -> return core.read(store.account(b.getString("acc")), b.getString("path"), b.getLong("uid"))
-            "prefetch" -> { core.read(store.account(b.getString("acc")), b.getString("path"), b.getLong("uid"), false); return ok() }
+            "prefetch" -> { core.read(store.account(b.getString("acc")), b.getString("path"), b.getLong("uid"), false, viaMain = true); return ok() }
             "previews" -> { val u = b.getJSONArray("uids"); return core.previews(store.account(b.getString("acc")), b.getString("path"), (0 until u.length()).map { u.getLong(it) }) }
             "bulk" -> return core.bulk(b.getString("op"), b.getJSONArray("items"), b.optJSONObject("dest"), b.optBoolean("learn"))
             "empty" -> return ok().put("deleted", core.empty(store.account(b.getString("acc")), b.getString("path")))
@@ -202,7 +208,7 @@ class Bridge(private val act: MainActivity) {
                     .put("notifications", androidx.core.app.NotificationManagerCompat.from(act).areNotificationsEnabled())
                     .put("overlay", Settings.canDrawOverlays(act))
                     .put("battery", pm.isIgnoringBatteryOptimizations(act.packageName))
-                    .put("accounts", accs)
+                    .put("accounts", accs).put("timings", Diag.timings())
             }
             "checkNow" -> {
                 var found = 0

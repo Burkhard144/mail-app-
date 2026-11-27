@@ -843,7 +843,7 @@ async function start(){
   /* Ordner vom letzten Mal sofort benutzen – Liste lädt gleich, Zähler kommen parallel dazu */
   let saved={};try{saved=JSON.parse(localStorage.getItem('gp-ov')||'{}')}catch(e){}
   CFG.accounts.forEach(a=>{if(saved[a.id]&&!OV[a.id])OV[a.id]=saved[a.id]});
-  if(CFG.accounts.every(a=>OV[a.id]&&OV[a.id].folders)){renderSide();loadList();loadOverviews()}
+  if(CFG.accounts.every(a=>OV[a.id]&&OV[a.id].folders)){renderSide();/* erst die Mails, dann (etwas später) die Ordner-Zähler – sonst melden sich beim Start alle Verbindungen gleichzeitig an */loadList().finally(()=>setTimeout(loadOverviews,1500))}
   else loadOverviews().then(()=>loadList());
 }
 async function loadOverviews(){
@@ -945,7 +945,7 @@ async function loadList(silent){
   const keep=new Set(fresh.map(keyOf));CHECK.forEach(k=>{if(!keep.has(k))CHECK.delete(k)});
   ITEMS=fresh.filter(m=>!gone(m)).sort((a,b)=>b.date-a.date);
   if(!Q)saveLC(vk,ITEMS);
-  setTimeout(()=>prefetchTop(seq),300);
+  setTimeout(()=>prefetchTop(seq),4000);
   if(moved){toast(`${moved} E-Mail${moved===1?'':'s'} vom Spamfilter in den Spam-Ordner verschoben`);loadOverviews()}
   renderList();
 }
@@ -1806,6 +1806,7 @@ async function loadDiag(){const box=$('ndiag');if(!box)return;
   const li=(b,yes,no)=>`<li class="${b?'on':'off'}">${ic(b?'tick':'x')}<span>${b?yes:no}</span></li>`;
   box.innerHTML=`<span class="fl">Status</span><ul class="diag">${li(d.service,'Hintergrund-Überwachung läuft','Hintergrund-Überwachung läuft nicht')}${li(d.notifications,'Benachrichtigungen erlaubt','Benachrichtigungen sind in Android ausgeschaltet')}${li(d.battery,'Akku: keine Einschränkungen','Akku-Optimierung ist an – HyperOS kann die App schlafen schicken')}</ul>
     ${(d.accounts||[]).map(a=>`<div class="diag-acc"><b>${esc(a.name||a.email||'')}</b><small>${a.state==='verbunden'?'✓ verbunden':a.state==='getrennt'?'✗ getrennt':'noch keine Verbindung'}${a.stateAt?' · '+agoL(a.stateAt):''}</small>${a.checkAt?`<small>Zuletzt nachgesehen: ${agoL(a.checkAt)}</small>`:''}${a.notifyAt?`<small>Letzte Meldung: ${agoL(a.notifyAt)} – ${esc(a.notifySubject||'')}</small>`:''}${a.error&&a.state!=='verbunden'?`<small class="errtxt" style="margin:0">${esc(a.error)}</small>`:''}</div>`).join('')}
+    ${(d.timings||[]).length?`<span class="fl" style="margin-top:14px">Ladezeiten (letzte Aktionen)</span><div class="diag-acc">${d.timings.slice(0,25).map(t=>{const nm={anmelden:'Anmeldung',list:'Liste laden',read:'Mail öffnen',prefetch:'Vorladen',overview:'Zähler',previews:'Vorschau',send:'Senden',sendNow:'Jetzt senden',attachment:'Anhang',bulk:'Mehrfach-Aktion'}[t.what]||t.what;const sec=(t.ms/1000).toFixed(1).replace('.',',');const slow=t.ms>2000;return `<small style="${slow?'color:#c0392b;font-weight:600':''}">${t.ok?'':'✗ '}${nm} · ${esc(t.who||'')} · ${sec} s · ${agoL(t.at)}</small>`}).join('')}</div>`:''}
     <div class="row-btns"><button class="btn" id="nd-refresh">${ic('refresh')}Status aktualisieren</button><button class="btn" id="nd-check">${ic('mailopen')}Jetzt nachsehen</button></div>`;
   $('nd-refresh').onclick=loadDiag;
   $('nd-check').onclick=async()=>{const b=$('nd-check');b.disabled=true;b.textContent='Sehe nach …';

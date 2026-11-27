@@ -102,6 +102,14 @@ object Diag {
     }
     fun checked(id: String, found: Int) = upd(id) { it.put("checkAt", System.currentTimeMillis()).put("found", found) }
     fun notified(id: String, subject: String) = upd(id) { it.put("notifyAt", System.currentTimeMillis()).put("notifySubject", subject.take(80)) }
+
+    /** Ladezeiten der letzten Aktionen (nur im Speicher) – zeigt, wo die App wartet. */
+    private val times = ArrayDeque<JSONObject>()
+    fun timing(what: String, who: String, ms: Long, ok: Boolean = true) = synchronized(times) {
+        times.addFirst(JSONObject().put("what", what).put("who", who).put("ms", ms).put("ok", ok).put("at", System.currentTimeMillis()))
+        while (times.size > 60) times.removeLast()
+    }
+    fun timings(): org.json.JSONArray = synchronized(times) { org.json.JSONArray(times.toList()) }
 }
 
 /** Prüft alle 15 Minuten die Posteingänge und meldet Mails, die der Hintergrunddienst verpasst hat. */

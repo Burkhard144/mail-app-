@@ -66,9 +66,12 @@ class MailCore(private val store: Store) {
         val proto = p.getProperty("mail.store.protocol")
         if (idle) p["mail.$proto.timeout"] = (10 * 60_000).toString()
         val s = Session.getInstance(p).getStore(proto) as IMAPStore
+        val t0 = android.os.SystemClock.elapsedRealtime()
+        val who = acc.optString("name").ifBlank { acc.optString("email") } + if (idle) " (Wächter)" else ""
         try {
             s.connect(acc.optString("imapHost"), acc.optInt("imapPort", 993), user(acc), pass)
-        } catch (e: Exception) { throw friendly(e, acc) }
+        } catch (e: Exception) { Diag.timing("anmelden", who, android.os.SystemClock.elapsedRealtime() - t0, false); throw friendly(e, acc) }
+        Diag.timing("anmelden", who, android.os.SystemClock.elapsedRealtime() - t0)
         return s
     }
 
@@ -415,7 +418,7 @@ class MailCore(private val store: Store) {
         return f
     }
 
-    fun read(acc: JSONObject, path: String, uid: Long, markSeen: Boolean = true): JSONObject {
+    fun read(acc: JSONObject, path: String, uid: Long, markSeen: Boolean = true, viaMain: Boolean = false): JSONObject {
         val ck = acc.getString("id") + "|" + path + "|" + uid
         synchronized(readCache) { readCache[ck] }?.let { cached ->
             if (!markSeen) return cached
@@ -428,6 +431,14 @@ class MailCore(private val store: Store) {
             return cached
         }
         val rules = store.load().getJSONObject("rules")
+        // Vorladen nutzt die schon offene Hauptverbindung – so bleibt die Lese-Verbindung frei und es gibt beim Start keine Extra-Anmeldungen
+        if (viaMain) return readOn(acc, path, uid, "", ck, rules, markSeen)
+        // Lese-Verbindung noch nicht angemeldet, Hauptverbindung schon → sofort darüber lesen und die Lese-Verbindung nebenbei aufbauen
+        val id = acc.getString("id")
+        if (stores[id + READ]?.isConnected != true && stores[id]?.isConnected == true) {
+            Thread { try { withAcc(acc, READ) { } } catch (_: Exception) {} }.start()
+            return readOn(acc, path, uid, "", ck, rules, markSeen)
+        }
         return try { readOn(acc, path, uid, READ, ck, rules, markSeen) } catch (e: UserError) {
             if (e.message?.contains("nicht mehr gefunden") == true) throw e
             // zweite Verbindung abgelehnt (z. B. Gmail) → über die Hauptverbindung lesen
