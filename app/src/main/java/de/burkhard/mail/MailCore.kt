@@ -526,6 +526,75 @@ class MailCore(private val store: Store) {
         }
     }
 
+    // ---------- Spam-Aufräumen ----------
+    /** Spam-Ordner → Papierkorb (beim Start und stündlich). Genau diese Mails werden frühestens nach 55 Minuten
+     *  im Papierkorb endgültig gelöscht – alle anderen Mails im Papierkorb bleiben unangetastet. */
+    private val cleanLock = Any()
+    fun spamCleanupAll(force: Boolean = false) {
+        if (store.load().getJSONObject("settings").optBoolean("spamClean", true) == false) return
+        synchronized(cleanLock) {
+            for (acc in store.accounts()) try { spamCleanup(acc, force) } catch (_: Exception) {}
+        }
+    }
+
+    private fun spamCleanup(acc: JSONObject, force: Boolean) {
+        val id = acc.getString("id")
+        val book = store.getJson("spamclean")
+        val mine = book.optJSONObject(id) ?: JSONObject()
+        val now = System.currentTimeMillis()
+        if (!force && now - mine.optLong("last") < 55 * 60_000) return
+        val fs = folders(acc, slot = INFO)
+        val junk = byRole(fs, "junk") ?: return
+        val trash = byRole(fs, "trash") ?: return
+        val pending = mine.optJSONArray("ids") ?: JSONArray()
+        val keep = JSONArray()
+        val due = mutableListOf<String>()
+        for (i in 0 until pending.length()) {
+            val e = pending.getJSONObject(i)
+            if (now - e.optLong("at") >= 55 * 60_000) due += e.getString("mid") else keep.put(e)
+        }
+        val t0 = android.os.SystemClock.elapsedRealtime()
+        var deleted = 0; var moved = 0
+        val st = connectNew(acc, store.password(id))
+        try {
+            // 1) früher verschobene Spam-Mails im Papierkorb endgültig löschen (nur genau diese, erkannt an der Message-ID)
+            if (due.isNotEmpty()) {
+                val f = st.getFolder(trash) as IMAPFolder
+                f.open(Folder.READ_WRITE)
+                try {
+                    for (chunk in due.chunked(40)) {
+                        val term: javax.mail.search.SearchTerm = if (chunk.size == 1) javax.mail.search.MessageIDTerm(chunk[0])
+                            else javax.mail.search.OrTerm(chunk.map { javax.mail.search.MessageIDTerm(it) }.toTypedArray())
+                        val found = f.search(term)
+                        if (found.isNotEmpty()) { f.setFlags(found, Flags(Flags.Flag.DELETED), true); deleted += found.size }
+                    }
+                    if (deleted > 0) f.expunge()
+                } finally { try { f.close(false) } catch (_: Exception) {} }
+            }
+            // 2) aktuellen Inhalt des Spam-Ordners in den Papierkorb schieben und merken
+            val j = st.getFolder(junk) as IMAPFolder
+            j.open(Folder.READ_WRITE)
+            try {
+                val msgs = j.messages
+                if (msgs.isNotEmpty()) {
+                    val fp = FetchProfile(); fp.add(FetchProfile.Item.ENVELOPE); j.fetch(msgs, fp)
+                    val withId = mutableListOf<Message>(); val noId = mutableListOf<Message>()
+                    for (m in msgs) {
+                        val mid = try { (m as MimeMessage).messageID } catch (_: Exception) { null }
+                        if (mid.isNullOrBlank()) noId += m else { withId += m; keep.put(JSONObject().put("mid", mid).put("at", now)) }
+                    }
+                    if (withId.isNotEmpty()) { moveIn(st, j, withId.toTypedArray(), trash); moved += withId.size }
+                    // ohne Message-ID ließe sich die Mail im Papierkorb nicht sicher wiederfinden → direkt endgültig löschen
+                    if (noId.isNotEmpty()) { j.setFlags(noId.toTypedArray(), Flags(Flags.Flag.DELETED), true); j.expunge(); deleted += noId.size }
+                }
+            } finally { try { j.close(false) } catch (_: Exception) {} }
+        } finally { try { st.close() } catch (_: Exception) {} }
+        mine.put("last", now).put("ids", keep)
+        book.put(id, mine); store.putJson("spamclean", book)
+        if (moved + deleted > 0) Diag.timing("spam", (acc.optString("name").ifBlank { acc.optString("email") }) + " · $moved verschoben, $deleted gelöscht",
+            android.os.SystemClock.elapsedRealtime() - t0)
+    }
+
     // ---------- Verschieben / Löschen / Markieren ----------
     private fun moveIn(s: IMAPStore, f: IMAPFolder, msgs: Array<Message>, dest: String) {
         if (msgs.isEmpty()) return

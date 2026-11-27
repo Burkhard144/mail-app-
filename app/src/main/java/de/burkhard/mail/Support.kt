@@ -116,6 +116,7 @@ object Diag {
 class CheckWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result {
         val app = MailApp.app
+        try { app.core.spamCleanupAll() } catch (_: Exception) {}   // stündlich (die Funktion prüft selbst, ob eine Stunde um ist)
         if (app.store.load().getJSONObject("settings").optJSONObject("notify")?.optBoolean("instant", true) == false) return Result.success()
         for (acc in app.store.accounts()) {
             try {

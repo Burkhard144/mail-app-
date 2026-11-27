@@ -46,6 +46,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         applySecure()
+        // Spam aufräumen – erst nach ein paar Sekunden, damit der Start nicht gebremst wird
+        Thread { try { Thread.sleep(15_000); MailApp.app.core.spamCleanupAll(force = true) } catch (_: Exception) {} }.start()
         web = WebView(this)
         setContentView(web)
         val loader = WebViewAssetLoader.Builder().addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this)).build()
